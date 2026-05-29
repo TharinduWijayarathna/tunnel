@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tunnel — Local Network Exposure</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <div class="header-content">
+        <div class="brand">
+          <div class="logo">
+            <svg viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <circle cx="14" cy="14" r="13" stroke="#1a56db" stroke-width="1.5" fill="none"/>
+              <circle cx="14" cy="14" r="8" stroke="#1a56db" stroke-width="1" fill="none" stroke-opacity="0.4"/>
+              <circle cx="14" cy="14" r="3.5" fill="#1a56db" opacity="0.8"/>
+              <path d="M14 1v3M14 24v3M1 14h3M24 14h3" stroke="#1a56db" stroke-width="1.25" stroke-linecap="round" stroke-opacity="0.4"/>
+            </svg>
+          </div>
+          <h1>Tunnel</h1>
+          <span class="tagline">Expose localhost to your network</span>
+        </div>
+        <div class="network-info" id="networkInfo">
+          <!-- Populated dynamically -->
+        </div>
+      </div>
+    </header>
+
+    <main class="main-content">
+      <section class="create-section">
+        <h2 class="section-title">Create Tunnel</h2>
+        <div class="create-card">
+          <form id="createForm" autocomplete="off">
+            <div class="form-row">
+              <div class="form-group">
+                <label for="localPort">Local port</label>
+                <input type="number" id="localPort" placeholder="3000" min="1" max="65535" required>
+              </div>
+              <div class="form-group">
+                <label for="exposedPort">Exposed port</label>
+                <input type="number" id="exposedPort" placeholder="3000" min="1" max="65535" required>
+              </div>
+            </div>
+            <div class="internet-toggle-group">
+              <label class="toggle-switch" for="exposeInternet">
+                <input type="checkbox" id="exposeInternet">
+                <span class="toggle-slider"></span>
+              </label>
+              <div class="toggle-label">
+                <span class="toggle-title">Expose to internet</span>
+                <span class="toggle-hint">Generate a public URL accessible from anywhere</span>
+              </div>
+            </div>
+            <button type="submit" class="btn-create" id="btnCreate">
+              <span class="btn-icon">⚡</span>
+              Create tunnel
+            </button>
+          </form>
+        </div>
+      </section>
+
+      <section class="tunnels-section">
+        <h2 class="section-title">
+          Active tunnels
+          <span class="tunnel-count" id="tunnelCount">0</span>
+        </h2>
+        <div class="tunnels-grid" id="tunnelsGrid">
+          <!-- Populated dynamically -->
+        </div>
+        <div class="empty-state" id="emptyState">
+          <div class="empty-icon">⬡</div>
+          <h3>No active tunnels</h3>
+          <p>Create a tunnel above to expose a local app to your network.</p>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- QR Modal -->
+  <div class="modal-overlay" id="qrModal">
+    <div class="modal-content">
+      <button class="modal-close" id="modalClose" aria-label="Close">×</button>
+      <h3 class="modal-title">Scan to access</h3>
+      <div class="qr-container" id="qrContainer">
+        <!-- SVG injected here -->
+      </div>
+      <p class="modal-url" id="modalUrl"></p>
+    </div>
+  </div>
+
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,19 @@
+{
+  "name": "tunnel",
+  "version": "1.0.0",
+  "description": "Expose localhost apps to your local network with a beautiful dashboard",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node index.js"
+  },
+  "keywords": ["tunnel", "proxy", "localhost", "network", "lan"],
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.21.0",
+    "http-proxy": "^1.18.1",
+    "localtunnel": "^2.0.2",
+    "open": "^10.1.0",
+    "qrcode": "^1.5.4"
+  }
+}

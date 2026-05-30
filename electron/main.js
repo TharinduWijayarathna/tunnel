@@ -1,28 +1,48 @@
-const { app, BrowserWindow, shell } = require('electron');
+const { app, BrowserWindow, shell, nativeImage, Tray, Menu } = require('electron');
 const path = require('path');
 
 const DASHBOARD_PORT = 4040;
 let mainWindow = null;
+let tray = null;
 let serverInstance = null;
 let tunnelManagerInstance = null;
 
+function getIconPath() {
+  // Use build/icon.png for all platforms
+  const iconPath = path.join(__dirname, '..', 'build', 'icon.png');
+  return iconPath;
+}
+
 function createWindow() {
-  mainWindow = new BrowserWindow({
+  const isMac = process.platform === 'darwin';
+  const isWin = process.platform === 'win32';
+
+  const windowOptions = {
     width: 1100,
     height: 750,
     minWidth: 800,
     minHeight: 500,
     title: 'Tunnel',
-    titleBarStyle: 'hiddenInset',
-    trafficLightPosition: { x: 16, y: 16 },
     backgroundColor: '#f7f7f6',
+    icon: getIconPath(),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
     },
     show: false,
-  });
+  };
+
+  // macOS-specific: hidden title bar with inset traffic lights
+  if (isMac) {
+    windowOptions.titleBarStyle = 'hiddenInset';
+    windowOptions.trafficLightPosition = { x: 16, y: 16 };
+  }
+
+  // Windows/Linux: use default frame
+  // (standard title bar with native window controls)
+
+  mainWindow = new BrowserWindow(windowOptions);
 
   // Load the dashboard once the server is ready
   mainWindow.loadURL(`http://localhost:${DASHBOARD_PORT}`);
@@ -30,6 +50,7 @@ function createWindow() {
   // Show window when ready to avoid white flash
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
+    mainWindow.focus();
   });
 
   // Open external links in default browser
@@ -43,6 +64,44 @@ function createWindow() {
 
   mainWindow.on('closed', () => {
     mainWindow = null;
+  });
+}
+
+function createTray() {
+  const icon = nativeImage.createFromPath(getIconPath()).resize({ width: 18, height: 18 });
+  tray = new Tray(icon);
+
+  const contextMenu = Menu.buildFromTemplate([
+    {
+      label: 'Show Tunnel',
+      click: () => {
+        if (mainWindow) {
+          mainWindow.show();
+          mainWindow.focus();
+        } else {
+          createWindow();
+        }
+      },
+    },
+    { type: 'separator' },
+    {
+      label: 'Quit Tunnel',
+      click: () => {
+        app.quit();
+      },
+    },
+  ]);
+
+  tray.setToolTip('Tunnel — Local Network Exposure');
+  tray.setContextMenu(contextMenu);
+
+  tray.on('click', () => {
+    if (mainWindow) {
+      mainWindow.show();
+      mainWindow.focus();
+    } else {
+      createWindow();
+    }
   });
 }
 
@@ -61,7 +120,6 @@ async function startServer() {
 
       serverInstance.on('error', (err) => {
         if (err.code === 'EADDRINUSE') {
-          // Port already in use — likely the CLI version is running, just load it
           console.log(`[Tunnel] Port ${DASHBOARD_PORT} already in use, connecting to existing server`);
           resolve();
         } else {
@@ -94,6 +152,7 @@ app.whenReady().then(async () => {
   try {
     await startServer();
     createWindow();
+    createTray();
   } catch (err) {
     console.error('[Tunnel] Failed to start:', err);
     app.quit();
@@ -108,7 +167,6 @@ app.whenReady().then(async () => {
 });
 
 app.on('window-all-closed', () => {
-  // On macOS, keep app in dock unless explicitly quit
   if (process.platform !== 'darwin') {
     app.quit();
   }

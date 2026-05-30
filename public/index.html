@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tunnel — Local Network Exposure</title>
+  <title>Tunnel</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
@@ -15,26 +15,63 @@
       <div class="header-content">
         <div class="brand">
           <div class="logo">
-            <svg viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-              <circle cx="14" cy="14" r="13" stroke="#1a56db" stroke-width="1.5" fill="none"/>
-              <circle cx="14" cy="14" r="8" stroke="#1a56db" stroke-width="1" fill="none" stroke-opacity="0.4"/>
-              <circle cx="14" cy="14" r="3.5" fill="#1a56db" opacity="0.8"/>
-              <path d="M14 1v3M14 24v3M1 14h3M24 14h3" stroke="#1a56db" stroke-width="1.25" stroke-linecap="round" stroke-opacity="0.4"/>
-            </svg>
+            <img src="/icon.png" alt="Tunnel" width="28" height="28">
           </div>
           <h1>Tunnel</h1>
-          <span class="tagline">Expose localhost to your network</span>
+          <span class="version">v1.0.0</span>
         </div>
-        <div class="network-info" id="networkInfo">
-          <!-- Populated dynamically -->
+        <div class="header-right">
+          <div class="network-info" id="networkInfo">
+            <!-- Populated dynamically -->
+          </div>
         </div>
       </div>
     </header>
 
     <main class="main-content">
+      <!-- Status Bar -->
+      <div class="status-bar" id="statusBar">
+        <div class="status-item">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+            <line x1="8" y1="21" x2="16" y2="21"></line>
+            <line x1="12" y1="17" x2="12" y2="21"></line>
+          </svg>
+          <span id="statusPlatform"></span>
+        </div>
+        <div class="status-item">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M5 12.55a11 11 0 0 1 14.08 0"></path>
+            <path d="M1.42 9a16 16 0 0 1 21.16 0"></path>
+            <path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path>
+            <circle cx="12" cy="20" r="1"></circle>
+          </svg>
+          <span id="statusIP">-</span>
+        </div>
+        <div class="status-item">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+          </svg>
+          <span>Port <strong>4040</strong></span>
+        </div>
+        <div class="status-spacer"></div>
+        <div class="status-item active-count" id="statusTunnels">
+          <span class="active-dot"></span>
+          <span><strong id="activeTunnelCount">0</strong> active</span>
+        </div>
+      </div>
+
       <section class="ports-section">
-        <h2 class="section-title">
-          Running applications
+        <div class="section-header">
+          <h2 class="section-title">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect>
+              <rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect>
+              <line x1="6" y1="6" x2="6.01" y2="6"></line>
+              <line x1="6" y1="18" x2="6.01" y2="18"></line>
+            </svg>
+            Running Applications
+          </h2>
           <button class="btn-refresh" id="btnRefreshPorts" title="Refresh ports">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="23 4 23 10 17 10"></polyline>
@@ -42,39 +79,51 @@
               <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
             </svg>
           </button>
-        </h2>
+        </div>
         <div class="ports-list" id="portsList">
-          <div class="ports-loading" id="portsLoading">Scanning ports...</div>
+          <div class="ports-loading">Scanning ports...</div>
         </div>
       </section>
 
       <section class="tunnels-section">
-        <h2 class="section-title">
-          Active tunnels
-          <span class="tunnel-count" id="tunnelCount">0</span>
-        </h2>
+        <div class="section-header">
+          <h2 class="section-title">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="2" y1="12" x2="22" y2="12"></line>
+              <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+            </svg>
+            Active Tunnels
+            <span class="tunnel-count" id="tunnelCount">0</span>
+          </h2>
+        </div>
         <div class="tunnels-grid" id="tunnelsGrid">
           <!-- Populated dynamically -->
         </div>
         <div class="empty-state" id="emptyState">
           <div class="empty-icon">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.3">
-              <circle cx="12" cy="12" r="10"></circle>
-              <line x1="2" y1="12" x2="22" y2="12"></line>
-              <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
-            </svg>
+            <img src="/icon.png" alt="" width="48" height="48" style="opacity: 0.15; filter: grayscale(1);">
           </div>
           <h3>No active tunnels</h3>
           <p>Click "Expose" on a running application above to create a tunnel.</p>
         </div>
       </section>
     </main>
+
+    <footer class="footer">
+      <span>Tunnel v1.0.0</span>
+      <span class="footer-sep">·</span>
+      <span id="footerPlatform"></span>
+    </footer>
   </div>
 
   <!-- QR Modal -->
   <div class="modal-overlay" id="qrModal">
     <div class="modal-content">
       <button class="modal-close" id="modalClose" aria-label="Close">×</button>
+      <div class="modal-icon">
+        <img src="/icon.png" alt="" width="32" height="32">
+      </div>
       <h3 class="modal-title">Scan to access</h3>
       <div class="qr-container" id="qrContainer"></div>
       <p class="modal-url" id="modalUrl"></p>

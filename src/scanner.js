@@ -141,25 +141,16 @@ function isDevProcess(processName) {
 }
 
 /**
- * Scans for all listening TCP ports on the machine using `lsof`.
- * Returns an array of { pid, process, port, user } objects.
- * Filters out system processes and only shows developer-relevant apps.
+ * Scans for listening ports using lsof (macOS/Linux).
  */
-function scanListeningPorts(excludePorts = []) {
+function scanWithLsof(excludePorts) {
   return new Promise((resolve) => {
-    // -iTCP: only TCP connections
-    // -sTCP:LISTEN: only LISTEN state
-    // -P: inhibit port name lookup (show port numbers)
-    // -n: inhibit hostname lookup (show IPs)
     exec('lsof -iTCP -sTCP:LISTEN -P -n', (error, stdout) => {
-      if (error || !stdout) {
-        return resolve([]);
-      }
+      if (error || !stdout) return resolve([]);
 
       const lines = stdout.trim().split('\n');
       if (lines.length < 2) return resolve([]);
 
-      // Skip header line
       const entries = lines.slice(1);
       const portMap = new Map();
 
@@ -170,31 +161,103 @@ function scanListeningPorts(excludePorts = []) {
         const process = parts[0];
         const pid = parseInt(parts[1], 10);
         const user = parts[2];
-        const nameField = parts[8]; // e.g. *:3000 or 127.0.0.1:8000
+        const nameField = parts[8];
 
-        // Extract port number from the name field
         const portMatch = nameField.match(/:(\d+)$/);
         if (!portMatch) continue;
 
         const port = parseInt(portMatch[1], 10);
-
-        // Skip excluded ports (like the Tunnel dashboard itself)
         if (excludePorts.includes(port)) continue;
-
-        // Filter out system processes
         if (!isDevProcess(process)) continue;
 
-        // Deduplicate: keep the first entry per port (most specific process)
         if (!portMap.has(port)) {
           portMap.set(port, { pid, process, port, user });
         }
       }
 
-      // Sort by port number
-      const results = Array.from(portMap.values()).sort((a, b) => a.port - b.port);
-      resolve(results);
+      resolve(Array.from(portMap.values()).sort((a, b) => a.port - b.port));
     });
   });
 }
 
+/**
+ * Scans for listening ports using netstat (Windows).
+ */
+function scanWithNetstat(excludePorts) {
+  return new Promise((resolve) => {
+    exec('netstat -ano -p TCP', (error, stdout) => {
+      if (error || !stdout) return resolve([]);
+
+      const lines = stdout.trim().split('\n');
+      const portMap = new Map();
+
+      for (const line of lines) {
+        if (!line.includes('LISTENING')) continue;
+
+        const parts = line.trim().split(/\s+/);
+        if (parts.length < 5) continue;
+
+        const localAddr = parts[1];
+        const pid = parseInt(parts[4], 10);
+
+        const portMatch = localAddr.match(/:(\d+)$/);
+        if (!portMatch) continue;
+
+        const port = parseInt(portMatch[1], 10);
+        if (excludePorts.includes(port)) continue;
+
+        if (!portMap.has(port)) {
+          portMap.set(port, { pid, process: `PID:${pid}`, port, user: '-' });
+        }
+      }
+
+      // Try to resolve process names for the PIDs
+      const results = Array.from(portMap.values());
+      if (results.length === 0) return resolve([]);
+
+      const pids = [...new Set(results.map((r) => r.pid))].join(',');
+      exec(`tasklist /FI "PID eq ${results[0].pid}" /FO CSV /NH`, () => {
+        // Batch resolve via wmic (more reliable)
+        exec('wmic process get processid,name /format:csv', (err2, stdout2) => {
+          if (!err2 && stdout2) {
+            const pidToName = {};
+            for (const row of stdout2.trim().split('\n')) {
+              const cols = row.trim().split(',');
+              if (cols.length >= 3) {
+                const name = cols[1];
+                const rowPid = parseInt(cols[2], 10);
+                if (name && rowPid) pidToName[rowPid] = name.replace(/\.exe$/i, '');
+              }
+            }
+
+            results.forEach((r) => {
+              if (pidToName[r.pid]) {
+                r.process = pidToName[r.pid];
+              }
+            });
+          }
+
+          // Filter after name resolution
+          const filtered = results.filter((r) => isDevProcess(r.process));
+          resolve(filtered.sort((a, b) => a.port - b.port));
+        });
+      });
+    });
+  });
+}
+
+/**
+ * Scans for all listening TCP ports on the machine.
+ * Uses lsof on macOS/Linux and netstat on Windows.
+ * Returns an array of { pid, process, port, user } objects.
+ * Filters out system processes and only shows developer-relevant apps.
+ */
+function scanListeningPorts(excludePorts = []) {
+  if (process.platform === 'win32') {
+    return scanWithNetstat(excludePorts);
+  }
+  return scanWithLsof(excludePorts);
+}
+
 module.exports = { scanListeningPorts };
+

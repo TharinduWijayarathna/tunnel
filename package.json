@@ -7,7 +7,10 @@
     "start": "node index.js",
     "dev": "node index.js",
     "electron:dev": "electron .",
-    "electron:build": "electron-builder --mac",
+    "electron:build": "electron-builder",
+    "electron:build:mac": "electron-builder --mac",
+    "electron:build:win": "electron-builder --win",
+    "electron:build:linux": "electron-builder --linux",
     "postinstall": "electron-builder install-app-deps"
   },
   "keywords": ["tunnel", "proxy", "localhost", "network", "lan", "electron"],
@@ -45,6 +48,29 @@
           "target": "dmg",
           "arch": ["universal"]
         }
+      ]
+    },
+    "win": {
+      "icon": "build/icon.png",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64", "arm64"]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "build/icon.png",
+      "uninstallerIcon": "build/icon.png"
+    },
+    "linux": {
+      "icon": "build/icon.png",
+      "category": "Development",
+      "target": [
+        "AppImage",
+        "deb"
       ]
     },
     "dmg": {

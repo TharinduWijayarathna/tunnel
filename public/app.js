@@ -8,6 +8,7 @@
   // ---------- State ----------
   let primaryIP = '';
   let tunnels = [];
+  let ports = [];
   let exposedPortManuallyEdited = false;
   let statusPollTimer = null;
   let statsPollTimer = null;
@@ -31,6 +32,14 @@
     qrContainer: $('#qrContainer'),
     modalUrl: $('#modalUrl'),
     toastContainer: $('#toastContainer'),
+    portsList: $('#portsList'),
+    btnRefreshPorts: $('#btnRefreshPorts'),
+  };
+
+  // ---------- SVG Icons ----------
+  const icons = {
+    arrow: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>',
+    check: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>',
   };
 
   // ---------- API Helpers ----------
@@ -58,9 +67,9 @@
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
 
-    const icons = { success: '✓', error: '✕', info: '·' };
+    const toastIcons = { success: '✓', error: '✕', info: '·' };
     toast.innerHTML = `
-      <span class="toast-icon">${icons[type] || '·'}</span>
+      <span class="toast-icon">${toastIcons[type] || '·'}</span>
       <span>${escapeHtml(message)}</span>
     `;
 
@@ -117,6 +126,80 @@
         <span class="ip">No external IPs</span>
       </div>
     `;
+  }
+
+  // ---------- Port Scanner ----------
+  async function fetchPorts() {
+    try {
+      const data = await apiGet('/api/ports');
+      ports = data.ports || [];
+      renderPorts();
+    } catch (err) {
+      console.error('Failed to fetch ports:', err);
+      dom.portsList.innerHTML = '<div class="ports-empty">Failed to scan ports</div>';
+    }
+  }
+
+  function renderPorts() {
+    if (!ports.length) {
+      dom.portsList.innerHTML = '<div class="ports-empty">No listening ports detected</div>';
+      return;
+    }
+
+    dom.portsList.innerHTML = ports.map((p) => portRowHTML(p)).join('');
+
+    // Bind expose buttons
+    ports.forEach((p) => {
+      const btn = $(`#expose-${p.port}`);
+      if (btn && !p.tunneled) {
+        btn.addEventListener('click', () => exposePort(p.port));
+      }
+    });
+  }
+
+  function portRowHTML(port) {
+    const actionHTML = port.tunneled
+      ? `<span class="port-tunneled-badge">${icons.check} Tunneled</span>`
+      : `<button class="btn-expose" id="expose-${port.port}">Expose ${icons.arrow}</button>`;
+
+    return `
+      <div class="port-row" id="port-row-${port.port}">
+        <span class="port-dot"></span>
+        <span class="port-process">${escapeHtml(port.process)}</span>
+        <span class="port-number">:${port.port}</span>
+        <span class="port-user">${escapeHtml(port.user)}</span>
+        <span class="port-pid">PID ${port.pid}</span>
+        ${actionHTML}
+      </div>
+    `;
+  }
+
+  function exposePort(port) {
+    dom.localPort.value = port;
+    dom.exposedPort.value = port;
+    exposedPortManuallyEdited = false;
+
+    // Scroll to create form and focus
+    dom.createForm.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+    // Brief highlight effect on the form
+    const card = dom.createForm.closest('.create-card');
+    if (card) {
+      card.style.borderColor = 'var(--accent)';
+      card.style.boxShadow = '0 0 0 3px var(--accent-surface)';
+      setTimeout(() => {
+        card.style.borderColor = '';
+        card.style.boxShadow = '';
+      }, 1500);
+    }
+
+    showToast(`Port ${port} selected — ready to create tunnel`, 'info');
+  }
+
+  async function refreshPorts() {
+    dom.btnRefreshPorts.classList.add('spinning');
+    await fetchPorts();
+    setTimeout(() => dom.btnRefreshPorts.classList.remove('spinning'), 600);
   }
 
   // ---------- Tunnel Rendering ----------
@@ -238,8 +321,8 @@
       dom.createForm.reset();
       exposedPortManuallyEdited = false;
 
-      // Refresh list
-      await fetchTunnels();
+      // Refresh tunnels and ports
+      await Promise.all([fetchTunnels(), fetchPorts()]);
     } catch (err) {
       showToast(err.message || 'Failed to create tunnel', 'error');
     } finally {
@@ -290,7 +373,9 @@
     try {
       await apiDelete(`/api/tunnels/${id}`);
       showToast(`Tunnel stopped`, 'info');
-      setTimeout(() => fetchTunnels(), 150);
+      setTimeout(async () => {
+        await Promise.all([fetchTunnels(), fetchPorts()]);
+      }, 150);
     } catch (err) {
       if (el) el.style.animation = '';
       showToast(err.message || 'Failed to stop tunnel', 'error');
@@ -455,6 +540,8 @@
       }
     });
 
+    dom.btnRefreshPorts.addEventListener('click', refreshPorts);
+
     setupPortSync();
   }
 
@@ -467,7 +554,7 @@
   // ---------- Initialize ----------
   async function init() {
     bindEvents();
-    await Promise.all([fetchInterfaces(), fetchTunnels()]);
+    await Promise.all([fetchInterfaces(), fetchTunnels(), fetchPorts()]);
     startPolling();
     pollStatuses();
   }

@@ -3,6 +3,7 @@ const path = require('path');
 const QRCode = require('qrcode');
 const TunnelManager = require('./proxy');
 const { getNetworkInterfaces, getPrimaryIP } = require('./network');
+const { scanListeningPorts } = require('./scanner');
 
 function createApp() {
   const app = express();
@@ -18,6 +19,27 @@ function createApp() {
       const interfaces = getNetworkInterfaces();
       const primaryIP = getPrimaryIP();
       res.json({ interfaces, primaryIP });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ─── API: Scan Listening Ports ──────────────────────────────────────
+  app.get('/api/ports', async (req, res) => {
+    try {
+      const dashboardPort = parseInt(process.env.PORT || 4040, 10);
+      const ports = await scanListeningPorts([dashboardPort]);
+
+      // Mark ports that already have an active tunnel
+      const activeTunnels = tunnelManager.getTunnels();
+      const tunneledPorts = new Set(activeTunnels.map((t) => t.localPort));
+
+      const enriched = ports.map((p) => ({
+        ...p,
+        tunneled: tunneledPorts.has(p.port),
+      }));
+
+      res.json({ ports: enriched });
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
@@ -126,7 +148,7 @@ function createApp() {
       const qr = await QRCode.toString(url, {
         type: 'svg',
         color: {
-          dark: '#e0e0e0',
+          dark: '#111110',
           light: '#00000000',
         },
         margin: 2,

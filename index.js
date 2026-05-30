@@ -6,7 +6,7 @@ const DASHBOARD_PORT = 4040;
 async function main() {
   const { app, tunnelManager } = createApp();
 
-  app.listen(DASHBOARD_PORT, '0.0.0.0', async () => {
+  app.listen(DASHBOARD_PORT, '0.0.0.0', () => {
     const primaryIP = getPrimaryIP();
     const interfaces = getNetworkInterfaces();
 
@@ -34,21 +34,13 @@ async function main() {
     console.log('');
     console.log('  Press Ctrl+C to stop.');
     console.log('');
-
-    // Auto-open dashboard in browser
-    try {
-      const open = (await import('open')).default;
-      await open(`http://localhost:${DASHBOARD_PORT}`);
-    } catch (e) {
-      // Silently fail if browser can't be opened
-    }
   });
 
   // Graceful shutdown
   const shutdown = async (signal) => {
     console.log(`\n  Received ${signal}. Shutting down...`);
     await tunnelManager.destroyAll();
-    console.log('  All tunnels closed. Goodbye! 👋');
+    console.log('  All tunnels closed. Goodbye!');
     process.exit(0);
   };
 

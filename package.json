@@ -1,13 +1,17 @@
 {
   "name": "tunnel",
   "version": "1.0.0",
-  "description": "Expose localhost apps to your local network with a beautiful dashboard",
-  "main": "index.js",
+  "description": "Expose localhost apps to your local network and the internet",
+  "main": "electron/main.js",
   "scripts": {
     "start": "node index.js",
-    "dev": "node index.js"
+    "dev": "node index.js",
+    "electron:dev": "electron .",
+    "electron:build": "electron-builder --mac",
+    "postinstall": "electron-builder install-app-deps"
   },
-  "keywords": ["tunnel", "proxy", "localhost", "network", "lan"],
+  "keywords": ["tunnel", "proxy", "localhost", "network", "lan", "electron"],
+  "author": "Tharindu Wijayarathna",
   "license": "MIT",
   "dependencies": {
     "express": "^4.21.0",
@@ -15,5 +19,40 @@
     "localtunnel": "^2.0.2",
     "open": "^10.1.0",
     "qrcode": "^1.5.4"
+  },
+  "devDependencies": {
+    "electron": "^35.0.0",
+    "electron-builder": "^26.0.0"
+  },
+  "build": {
+    "appId": "com.tharindu.tunnel",
+    "productName": "Tunnel",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "electron/**/*",
+      "src/**/*",
+      "public/**/*",
+      "index.js",
+      "package.json"
+    ],
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "icon": "build/icon.png",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["universal"]
+        }
+      ]
+    },
+    "dmg": {
+      "title": "Tunnel",
+      "contents": [
+        { "x": 130, "y": 220 },
+        { "x": 410, "y": 220, "type": "link", "path": "/Applications" }
+      ]
+    }
   }
 }

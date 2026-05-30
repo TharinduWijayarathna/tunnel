@@ -1,8 +1,149 @@
 const { exec } = require('child_process');
 
+// Known system/desktop processes that should never be shown as exposable
+const SYSTEM_PROCESSES = new Set([
+  'ControlCe',  // macOS Control Center
+  'Raycast',
+  'rapportd',   // macOS Rapport daemon
+  'sharingd',   // macOS sharing daemon
+  'AirPlayXPC', // AirPlay
+  'WiFiAgent',
+  'SystemUIServer',
+  'loginwindow',
+  'WindowServer',
+  'launchd',
+  'mDNSResponder',
+  'configd',
+  'UserEvent',
+  'com.apple',
+  'bluetoothd',
+  'remoted',
+  'identitys',
+  'coreautha',
+  'AMPDeviceD',
+  'AMPLibrar',
+  'Spotlight',
+  'Finder',
+  'Dock',
+  'Cursor',       // IDE internals
+  'Antigravi',    // This app's own helper
+  'Code',         // VS Code internals
+  'Code Helper',
+  'Electron',
+  'language_',    // Language servers (from IDEs)
+  'copilot-ag',
+  'gopls',
+  'typescript',
+  'eslint_d',
+  'biome',
+]);
+
+// Process name patterns to exclude (regex-based)
+const SYSTEM_PATTERNS = [
+  /^com\./i,        // macOS system services (com.apple.*, etc.)
+  /^launchd/i,
+  /^XPC/i,
+  /Helper$/i,       // Electron/Chrome helper processes
+  /^Google/i,       // Google Chrome internals
+  /^Chromium/i,
+  /^Firefox/i,
+  /^Safari/i,
+  /^Microsoft/i,
+  /^Slack/i,
+  /^Discord/i,
+  /^Spotify/i,
+  /^zoom/i,
+  /^Figma/i,
+  /^Notion/i,
+  /^Postman/i,
+];
+
+// Known developer-facing processes to always keep
+const DEV_PROCESSES = new Set([
+  'node',
+  'nodemon',
+  'deno',
+  'bun',
+  'php',
+  'php84',
+  'php83',
+  'php82',
+  'php81',
+  'php80',
+  'php74',
+  'python',
+  'python3',
+  'python3.1',
+  'python3.12',
+  'python3.13',
+  'uvicorn',
+  'gunicorn',
+  'flask',
+  'django',
+  'ruby',
+  'rails',
+  'puma',
+  'unicorn',
+  'java',
+  'gradle',
+  'mvn',
+  'tomcat',
+  'spring',
+  'go',
+  'air',
+  'cargo',
+  'rustc',
+  'dotnet',
+  'nginx',
+  'httpd',
+  'apache',
+  'caddy',
+  'docker-pr',
+  'docker',
+  'mysqld',
+  'postgres',
+  'mongod',
+  'redis-ser',
+  'next-serv',
+  'vite',
+  'webpack',
+  'esbuild',
+  'turbo',
+  'serve',
+  'http-serv',
+  'live-serv',
+  'artisan',
+  'mix',
+  'npm',
+  'yarn',
+  'pnpm',
+  'npx',
+]);
+
+/**
+ * Determines if a process is a developer-facing app worth showing.
+ */
+function isDevProcess(processName) {
+  // Always include known dev processes
+  if (DEV_PROCESSES.has(processName)) return true;
+
+  // Always exclude known system processes
+  if (SYSTEM_PROCESSES.has(processName)) return false;
+
+  // Exclude by pattern
+  for (const pattern of SYSTEM_PATTERNS) {
+    if (pattern.test(processName)) return false;
+  }
+
+  // For everything else, include it — better to show an unknown process
+  // than hide a legitimate dev server
+  return true;
+}
+
 /**
  * Scans for all listening TCP ports on the machine using `lsof`.
  * Returns an array of { pid, process, port, user } objects.
+ * Filters out system processes and only shows developer-relevant apps.
  */
 function scanListeningPorts(excludePorts = []) {
   return new Promise((resolve) => {
@@ -39,6 +180,9 @@ function scanListeningPorts(excludePorts = []) {
 
         // Skip excluded ports (like the Tunnel dashboard itself)
         if (excludePorts.includes(port)) continue;
+
+        // Filter out system processes
+        if (!isDevProcess(process)) continue;
 
         // Deduplicate: keep the first entry per port (most specific process)
         if (!portMap.has(port)) {

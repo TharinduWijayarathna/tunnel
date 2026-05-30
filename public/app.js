@@ -9,21 +9,13 @@
   let primaryIP = '';
   let tunnels = [];
   let ports = [];
-  let exposedPortManuallyEdited = false;
-  let statusPollTimer = null;
-  let statsPollTimer = null;
+  let openEditPort = null; // which port has its edit row open
 
   // ---------- DOM References ----------
   const $ = (sel) => document.querySelector(sel);
-  const $$ = (sel) => document.querySelectorAll(sel);
 
   const dom = {
     networkInfo: $('#networkInfo'),
-    createForm: $('#createForm'),
-    localPort: $('#localPort'),
-    exposedPort: $('#exposedPort'),
-    exposeInternet: $('#exposeInternet'),
-    btnCreate: $('#btnCreate'),
     tunnelsGrid: $('#tunnelsGrid'),
     tunnelCount: $('#tunnelCount'),
     emptyState: $('#emptyState'),
@@ -38,8 +30,9 @@
 
   // ---------- SVG Icons ----------
   const icons = {
-    arrow: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>',
+    arrow: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>',
     check: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>',
+    edit: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>',
   };
 
   // ---------- API Helpers ----------
@@ -75,7 +68,6 @@
 
     dom.toastContainer.appendChild(toast);
 
-    // Auto dismiss
     setTimeout(() => {
       toast.style.animation = 'toast-out 0.22s ease forwards';
       setTimeout(() => toast.remove(), 220);
@@ -90,21 +82,13 @@
       renderNetworkInfo(data.interfaces || [], data.primaryIP);
     } catch (err) {
       console.error('Failed to fetch interfaces:', err);
-      dom.networkInfo.innerHTML = `
-        <div class="network-chip">
-          <span class="ip">Network unavailable</span>
-        </div>
-      `;
+      dom.networkInfo.innerHTML = `<div class="network-chip"><span class="ip">Network unavailable</span></div>`;
     }
   }
 
   function renderNetworkInfo(interfaces, primary) {
     if (!interfaces.length) {
-      dom.networkInfo.innerHTML = `
-        <div class="network-chip">
-          <span class="ip">No network detected</span>
-        </div>
-      `;
+      dom.networkInfo.innerHTML = `<div class="network-chip"><span class="ip">No network detected</span></div>`;
       return;
     }
 
@@ -113,7 +97,7 @@
       .map((iface) => {
         const isPrimary = iface.ip === primary;
         return `
-          <div class="network-chip" id="badge-${iface.name}" title="${iface.name} (${iface.type || 'unknown'})">
+          <div class="network-chip" title="${iface.name} (${iface.type || 'unknown'})">
             ${isPrimary ? '<span class="dot"></span>' : ''}
             <span class="ip">${iface.ip}</span>
           </div>
@@ -121,11 +105,7 @@
       })
       .join('');
 
-    dom.networkInfo.innerHTML = badges || `
-      <div class="network-chip">
-        <span class="ip">No external IPs</span>
-      </div>
-    `;
+    dom.networkInfo.innerHTML = badges || `<div class="network-chip"><span class="ip">No external IPs</span></div>`;
   }
 
   // ---------- Port Scanner ----------
@@ -142,25 +122,26 @@
 
   function renderPorts() {
     if (!ports.length) {
-      dom.portsList.innerHTML = '<div class="ports-empty">No listening ports detected</div>';
+      dom.portsList.innerHTML = '<div class="ports-empty">No listening applications detected</div>';
       return;
     }
 
-    dom.portsList.innerHTML = ports.map((p) => portRowHTML(p)).join('');
-
-    // Bind expose buttons
-    ports.forEach((p) => {
-      const btn = $(`#expose-${p.port}`);
-      if (btn && !p.tunneled) {
-        btn.addEventListener('click', () => exposePort(p.port));
-      }
-    });
+    dom.portsList.innerHTML = ports.map((p) => portRowHTML(p) + portEditRowHTML(p)).join('');
+    bindPortActions();
   }
 
   function portRowHTML(port) {
-    const actionHTML = port.tunneled
-      ? `<span class="port-tunneled-badge">${icons.check} Tunneled</span>`
-      : `<button class="btn-expose" id="expose-${port.port}">Expose ${icons.arrow}</button>`;
+    let actionHTML;
+    if (port.tunneled) {
+      actionHTML = `<span class="port-tunneled-badge">${icons.check} Tunneled</span>`;
+    } else {
+      actionHTML = `
+        <div class="port-actions">
+          <button class="btn-port-edit" id="edit-btn-${port.port}" title="Configure before exposing">${icons.edit}</button>
+          <button class="btn-expose" id="expose-${port.port}">Expose ${icons.arrow}</button>
+        </div>
+      `;
+    }
 
     return `
       <div class="port-row" id="port-row-${port.port}">
@@ -174,26 +155,95 @@
     `;
   }
 
-  function exposePort(port) {
-    dom.localPort.value = port;
-    dom.exposedPort.value = port;
-    exposedPortManuallyEdited = false;
+  function portEditRowHTML(port) {
+    if (port.tunneled) return '';
+    const isOpen = openEditPort === port.port;
+    return `
+      <div class="port-edit-row ${isOpen ? 'visible' : ''}" id="edit-row-${port.port}">
+        <label>Exposed port</label>
+        <input type="number" id="edit-exposed-${port.port}" value="${port.port}" min="1" max="65535">
+        <div class="toggle-mini">
+          <label class="toggle-switch-sm" for="edit-internet-${port.port}">
+            <input type="checkbox" id="edit-internet-${port.port}">
+            <span class="toggle-slider-sm"></span>
+          </label>
+          <span class="toggle-mini-label">Public</span>
+        </div>
+        <button class="btn-expose-confirm" id="edit-confirm-${port.port}">Expose ${icons.arrow}</button>
+      </div>
+    `;
+  }
 
-    // Scroll to create form and focus
-    dom.createForm.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  function bindPortActions() {
+    ports.forEach((p) => {
+      if (p.tunneled) return;
 
-    // Brief highlight effect on the form
-    const card = dom.createForm.closest('.create-card');
-    if (card) {
-      card.style.borderColor = 'var(--accent)';
-      card.style.boxShadow = '0 0 0 3px var(--accent-surface)';
-      setTimeout(() => {
-        card.style.borderColor = '';
-        card.style.boxShadow = '';
-      }, 1500);
+      const exposeBtn = $(`#expose-${p.port}`);
+      const editBtn = $(`#edit-btn-${p.port}`);
+      const confirmBtn = $(`#edit-confirm-${p.port}`);
+
+      // Direct expose — same port, no internet
+      if (exposeBtn) {
+        exposeBtn.addEventListener('click', () => quickExpose(p.port));
+      }
+
+      // Toggle edit row
+      if (editBtn) {
+        editBtn.addEventListener('click', () => toggleEditRow(p.port));
+      }
+
+      // Confirm from edit row
+      if (confirmBtn) {
+        confirmBtn.addEventListener('click', () => {
+          const exposedPort = parseInt($(`#edit-exposed-${p.port}`)?.value, 10) || p.port;
+          const internet = $(`#edit-internet-${p.port}`)?.checked || false;
+          createTunnel(p.port, exposedPort, internet);
+        });
+      }
+    });
+  }
+
+  function toggleEditRow(port) {
+    const row = $(`#edit-row-${port}`);
+    const btn = $(`#edit-btn-${port}`);
+    if (!row) return;
+
+    // Close any other open edit row
+    if (openEditPort && openEditPort !== port) {
+      const prevRow = $(`#edit-row-${openEditPort}`);
+      const prevBtn = $(`#edit-btn-${openEditPort}`);
+      if (prevRow) prevRow.classList.remove('visible');
+      if (prevBtn) prevBtn.classList.remove('active');
     }
 
-    showToast(`Port ${port} selected — ready to create tunnel`, 'info');
+    const isOpen = row.classList.contains('visible');
+    row.classList.toggle('visible');
+    if (btn) btn.classList.toggle('active');
+    openEditPort = isOpen ? null : port;
+  }
+
+  async function quickExpose(port) {
+    const btn = $(`#expose-${port}`);
+    if (btn) { btn.disabled = true; btn.innerHTML = 'Creating...'; }
+
+    await createTunnel(port, port, false);
+  }
+
+  async function createTunnel(localPort, exposedPort, exposeToInternet) {
+    try {
+      const data = await apiPost('/api/tunnels', { localPort, exposedPort, exposeToInternet });
+      const msg = data.tunnel.publicUrl
+        ? `Tunnel live! Public: ${data.tunnel.publicUrl}`
+        : `Tunnel created — port ${localPort} → ${exposedPort}`;
+      showToast(msg, 'success');
+
+      openEditPort = null;
+      await Promise.all([fetchTunnels(), fetchPorts()]);
+    } catch (err) {
+      showToast(err.message || 'Failed to create tunnel', 'error');
+      // Re-render to reset button states
+      renderPorts();
+    }
   }
 
   async function refreshPorts() {
@@ -219,7 +269,6 @@
       .map((t, i) => tunnelCardHTML(t, i))
       .join('');
 
-    // Bind action buttons
     tunnels.forEach((t) => {
       const copyBtn = $(`#copy-${t.id}`);
       const qrBtn = $(`#qr-${t.id}`);
@@ -287,92 +336,29 @@
     }
   }
 
-  // ---------- Create Tunnel ----------
-  async function createTunnel(e) {
-    e.preventDefault();
-
-    const localPort = parseInt(dom.localPort.value, 10);
-    const exposedPort = parseInt(dom.exposedPort.value, 10);
-    const exposeToInternet = dom.exposeInternet.checked;
-
-    if (!localPort || !exposedPort) {
-      showToast('Please fill in port fields', 'error');
-      return;
-    }
-
-    if (localPort < 1 || localPort > 65535 || exposedPort < 1 || exposedPort > 65535) {
-      showToast('Port must be between 1 and 65535', 'error');
-      return;
-    }
-
-    // Disable button + show spinner text
-    dom.btnCreate.disabled = true;
-    const originalContent = dom.btnCreate.innerHTML;
-    dom.btnCreate.innerHTML = 'Creating...';
-
-    try {
-      const data = await apiPost('/api/tunnels', { localPort, exposedPort, exposeToInternet });
-      const msg = data.tunnel.publicUrl
-        ? `Tunnel live! Public: ${data.tunnel.publicUrl}`
-        : `Tunnel created — port ${localPort} → ${exposedPort}`;
-      showToast(msg, 'success');
-
-      // Reset form
-      dom.createForm.reset();
-      exposedPortManuallyEdited = false;
-
-      // Refresh tunnels and ports
-      await Promise.all([fetchTunnels(), fetchPorts()]);
-    } catch (err) {
-      showToast(err.message || 'Failed to create tunnel', 'error');
-    } finally {
-      dom.btnCreate.disabled = false;
-      dom.btnCreate.innerHTML = originalContent;
-    }
-  }
-
   // ---------- Toggle Internet ----------
   async function toggleInternet(id, enable) {
-    const tunnel = tunnels.find((t) => t.id === id);
     const btn = $(`#internet-${id}`);
-
-    if (btn) {
-      btn.disabled = true;
-      btn.textContent = 'Wait...';
-    }
+    if (btn) { btn.disabled = true; btn.textContent = 'Wait...'; }
 
     try {
       const data = await apiPost(`/api/tunnels/${id}/internet`, { enable });
-
-      if (data.publicUrl) {
-        showToast(`Public URL ready`, 'success');
-      } else {
-        showToast('Internet tunnel stopped', 'info');
-      }
-
+      showToast(data.publicUrl ? 'Public URL ready' : 'Internet tunnel stopped', data.publicUrl ? 'success' : 'info');
       await fetchTunnels();
     } catch (err) {
       showToast(err.message || 'Failed to toggle internet', 'error');
-      if (btn) {
-        btn.disabled = false;
-        btn.textContent = enable ? 'Go Public' : 'Stop Public';
-      }
+      if (btn) { btn.disabled = false; btn.textContent = enable ? 'Go Public' : 'Stop Public'; }
     }
   }
 
   // ---------- Delete Tunnel ----------
   async function deleteTunnel(id) {
-    const tunnel = tunnels.find((t) => t.id === id);
-    if (!tunnel) return;
-
     const el = $(`#tunnel-${id}`);
-    if (el) {
-       el.style.animation = 'card-in 0.15s ease reverse forwards';
-    }
+    if (el) el.style.animation = 'card-in 0.15s ease reverse forwards';
 
     try {
       await apiDelete(`/api/tunnels/${id}`);
-      showToast(`Tunnel stopped`, 'info');
+      showToast('Tunnel stopped', 'info');
       setTimeout(async () => {
         await Promise.all([fetchTunnels(), fetchPorts()]);
       }, 150);
@@ -390,9 +376,8 @@
 
     try {
       await navigator.clipboard.writeText(url);
-      showToast(`URL copied`, 'success');
+      showToast('URL copied', 'success');
     } catch {
-      // Fallback
       const ta = document.createElement('textarea');
       ta.value = url;
       ta.style.position = 'fixed';
@@ -412,7 +397,6 @@
     dom.qrModal.classList.add('visible');
 
     try {
-      // Prefer public URL for QR
       const tunnel = tunnels.find((t) => t.id === tunnelId);
       const type = tunnel && tunnel.publicUrl ? 'public' : 'local';
       const data = await apiGet(`/api/tunnels/${tunnelId}/qr?type=${type}`);
@@ -426,10 +410,7 @@
 
   function closeModal() {
     dom.qrModal.classList.remove('visible');
-    setTimeout(() => {
-      dom.qrContainer.innerHTML = '';
-      dom.modalUrl.textContent = '';
-    }, 200);
+    setTimeout(() => { dom.qrContainer.innerHTML = ''; dom.modalUrl.textContent = ''; }, 200);
   }
 
   // ---------- Status Polling ----------
@@ -449,16 +430,10 @@
       const tunnel = tunnels.find((t) => t.id === id);
       if (tunnel && tunnel._status !== status) {
         tunnel._status = status;
-
-        // Update DOM in-place
         const badge = $(`#status-badge-${id}`);
         const text = badge?.querySelector('.status-text');
-        if (badge) {
-          badge.className = `tunnel-status-badge ${status}`;
-        }
-        if (text) {
-          text.textContent = status === 'online' ? 'Active' : (status === 'offline' ? 'Offline' : 'Checking');
-        }
+        if (badge) badge.className = `tunnel-status-badge ${status}`;
+        if (text) text.textContent = status === 'online' ? 'Active' : (status === 'offline' ? 'Offline' : 'Checking');
       }
     });
   }
@@ -466,11 +441,9 @@
   // ---------- Stats Polling ----------
   async function pollStats() {
     if (!tunnels.length) return;
-
     try {
       const data = await apiGet('/api/tunnels');
       const fresh = data.tunnels || [];
-
       let needsRerender = false;
 
       fresh.forEach((ft) => {
@@ -478,8 +451,6 @@
         if (existing) {
           existing.totalRequests = ft.totalRequests;
           existing.activeConnections = ft.activeConnections;
-
-          // Check if internet status changed
           if (existing.internetActive !== ft.internetActive || existing.publicUrl !== ft.publicUrl) {
             existing.internetActive = ft.internetActive;
             existing.publicUrl = ft.publicUrl;
@@ -488,7 +459,6 @@
         }
       });
 
-      // Re-render if tunnel count changed or internet status changed
       if (fresh.length !== tunnels.length || needsRerender) {
         tunnels = fresh.map((ft) => ({
           ...ft,
@@ -501,23 +471,6 @@
     }
   }
 
-  // ---------- Port Auto-Sync ----------
-  function setupPortSync() {
-    dom.localPort.addEventListener('input', () => {
-      if (!exposedPortManuallyEdited) {
-        dom.exposedPort.value = dom.localPort.value;
-      }
-    });
-
-    dom.exposedPort.addEventListener('input', () => {
-      exposedPortManuallyEdited = true;
-    });
-
-    dom.createForm.addEventListener('reset', () => {
-      exposedPortManuallyEdited = false;
-    });
-  }
-
   // ---------- Utility ----------
   function escapeHtml(str) {
     const div = document.createElement('div');
@@ -527,35 +480,20 @@
 
   // ---------- Event Bindings ----------
   function bindEvents() {
-    dom.createForm.addEventListener('submit', createTunnel);
-
     dom.modalClose.addEventListener('click', closeModal);
-    dom.qrModal.addEventListener('click', (e) => {
-      if (e.target === dom.qrModal) closeModal();
-    });
-
+    dom.qrModal.addEventListener('click', (e) => { if (e.target === dom.qrModal) closeModal(); });
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && dom.qrModal.classList.contains('visible')) {
-        closeModal();
-      }
+      if (e.key === 'Escape' && dom.qrModal.classList.contains('visible')) closeModal();
     });
-
     dom.btnRefreshPorts.addEventListener('click', refreshPorts);
-
-    setupPortSync();
-  }
-
-  // ---------- Polling Setup ----------
-  function startPolling() {
-    statusPollTimer = setInterval(pollStatuses, 3000);
-    statsPollTimer = setInterval(pollStats, 5000);
   }
 
   // ---------- Initialize ----------
   async function init() {
     bindEvents();
     await Promise.all([fetchInterfaces(), fetchTunnels(), fetchPorts()]);
-    startPolling();
+    setInterval(pollStatuses, 3000);
+    setInterval(pollStats, 5000);
     pollStatuses();
   }
 

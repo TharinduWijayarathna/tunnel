@@ -32,40 +32,6 @@
     </header>
 
     <main class="main-content">
-      <section class="create-section">
-        <h2 class="section-title">Create Tunnel</h2>
-        <div class="create-card">
-          <form id="createForm" autocomplete="off">
-            <div class="form-row">
-              <div class="form-group">
-                <label for="localPort">Local port</label>
-                <input type="number" id="localPort" placeholder="3000" min="1" max="65535" required>
-              </div>
-              <div class="form-group">
-                <label for="exposedPort">Exposed port</label>
-                <input type="number" id="exposedPort" placeholder="3000" min="1" max="65535" required>
-              </div>
-            </div>
-            <div class="internet-toggle-group">
-              <label class="toggle-switch" for="exposeInternet">
-                <input type="checkbox" id="exposeInternet">
-                <span class="toggle-slider"></span>
-              </label>
-              <div class="toggle-label">
-                <span class="toggle-title">Expose to internet</span>
-                <span class="toggle-hint">Generate a public URL accessible from anywhere</span>
-              </div>
-            </div>
-            <button type="submit" class="btn-create" id="btnCreate">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="btn-icon" style="margin-right: 2px;">
-                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
-              </svg>
-              Create tunnel
-            </button>
-          </form>
-        </div>
-      </section>
-
       <section class="ports-section">
         <h2 class="section-title">
           Running applications
@@ -91,9 +57,15 @@
           <!-- Populated dynamically -->
         </div>
         <div class="empty-state" id="emptyState">
-          <div class="empty-icon">⬡</div>
+          <div class="empty-icon">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.3">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="2" y1="12" x2="22" y2="12"></line>
+              <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+            </svg>
+          </div>
           <h3>No active tunnels</h3>
-          <p>Create a tunnel above to expose a local app to your network.</p>
+          <p>Click "Expose" on a running application above to create a tunnel.</p>
         </div>
       </section>
     </main>
@@ -104,9 +76,7 @@
     <div class="modal-content">
       <button class="modal-close" id="modalClose" aria-label="Close">×</button>
       <h3 class="modal-title">Scan to access</h3>
-      <div class="qr-container" id="qrContainer">
-        <!-- SVG injected here -->
-      </div>
+      <div class="qr-container" id="qrContainer"></div>
       <p class="modal-url" id="modalUrl"></p>
     </div>
   </div>

@@ -25,7 +25,7 @@
   const $$ = (s) => document.querySelectorAll(s);
 
   const dom = {
-    networkInfo: $('#networkInfo'),
+
     portsList: $('#portsList'),
     portsEmpty: $('#portsEmpty'),
     portCountBadge: $('#portCountBadge'),
@@ -145,20 +145,9 @@
       const data = await apiGet('/api/interfaces');
       primaryIP = data.primaryIP || '';
       dom.statusIP.textContent = primaryIP || 'Offline';
-      renderNetworkPills(data.interfaces || [], data.primaryIP);
     } catch {
-      dom.networkInfo.innerHTML = `<div class="ip-pill"><span class="ip-dot" style="background:var(--red)"></span>Offline</div>`;
       dom.statusIP.textContent = 'Offline';
     }
-  }
-
-  function renderNetworkPills(interfaces, primary) {
-    const ext = interfaces.filter(i => i.ip && i.ip !== '127.0.0.1');
-    if (!ext.length) { dom.networkInfo.innerHTML = ''; return; }
-    dom.networkInfo.innerHTML = ext.map(i => {
-      const isPrimary = i.ip === primary;
-      return `<div class="ip-pill" title="${i.name}">${isPrimary ? '<span class="ip-dot"></span>' : ''}${i.ip}</div>`;
-    }).join('');
   }
 
   // ── Ports ──

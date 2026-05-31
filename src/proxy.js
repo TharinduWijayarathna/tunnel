@@ -90,17 +90,19 @@ class TunnelManager {
       activeConnections++;
 
       // Track incoming bytes
-      req.on('data', (chunk) => { bytesIn += chunk.length; });
+      req.on('data', (chunk) => {
+        bytesIn += chunk.length;
+      });
 
       // Track outgoing bytes and latency
       const origWrite = res.write.bind(res);
       const origEnd = res.end.bind(res);
 
-      res.write = function(chunk, ...args) {
+      res.write = function (chunk, ...args) {
         if (chunk) bytesOut += Buffer.byteLength(chunk);
         return origWrite(chunk, ...args);
       };
-      res.end = function(chunk, ...args) {
+      res.end = function (chunk, ...args) {
         if (chunk) bytesOut += Buffer.byteLength(chunk);
         return origEnd(chunk, ...args);
       };
@@ -145,8 +147,10 @@ class TunnelManager {
           publicUrl: null,
           historyInterval,
           getStats: () => ({
-            totalRequests, activeConnections,
-            bytesIn, bytesOut,
+            totalRequests,
+            activeConnections,
+            bytesIn,
+            bytesOut,
             avgLatency: latencyCount > 0 ? Math.round(latencySum / latencyCount) : 0,
             latencyP99,
             history,
@@ -336,7 +340,7 @@ class TunnelManager {
     for (const id of ids) {
       try {
         await this.destroyTunnel(id);
-      } catch (e) {
+      } catch (_e) {
         // ignore cleanup errors
       }
     }

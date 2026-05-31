@@ -9,23 +9,25 @@
   let tunnels = [];
   let ports = [];
   let openEditPort = null;
-  let currentView = 'dashboard';
+  let currentView = 'dashboard'; // eslint-disable-line no-unused-vars
 
   // ── Platform ──
-  const platform = (window.tunnelApp && window.tunnelApp.platform) || (() => {
-    const ua = navigator.userAgent.toLowerCase();
-    if (ua.includes('mac')) return 'darwin';
-    if (ua.includes('win')) return 'win32';
-    return 'linux';
-  })();
-  const platformLabel = platform === 'darwin' ? 'macOS' : platform === 'win32' ? 'Windows' : 'Linux';
+  const platform =
+    (window.tunnelApp && window.tunnelApp.platform) ||
+    (() => {
+      const ua = navigator.userAgent.toLowerCase();
+      if (ua.includes('mac')) return 'darwin';
+      if (ua.includes('win')) return 'win32';
+      return 'linux';
+    })();
+  const platformLabel =
+    platform === 'darwin' ? 'macOS' : platform === 'win32' ? 'Windows' : 'Linux';
 
   // ── DOM ──
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => document.querySelectorAll(s);
 
   const dom = {
-
     portsList: $('#portsList'),
     portsEmpty: $('#portsEmpty'),
     portCountBadge: $('#portCountBadge'),
@@ -66,12 +68,15 @@
 
   // ── SVG Icons ──
   const icons = {
-    arrow: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>',
-    check: '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>',
+    arrow:
+      '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>',
+    check:
+      '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>',
     edit: '<svg viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M7 2l4 4-7 7H0V9l7-7z"/></svg>',
     copy: '<svg viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="4" y="4" width="8" height="8" rx="1.2"/><path d="M9 4V2.5A1.5 1.5 0 0 0 7.5 1H2.5A1.5 1.5 0 0 0 1 2.5v5A1.5 1.5 0 0 0 2.5 9H4"/></svg>',
     qr: '<svg viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="1" y="1" width="4" height="4" rx=".5"/><rect x="8" y="1" width="4" height="4" rx=".5"/><rect x="1" y="8" width="4" height="4" rx=".5"/><path d="M8 8h4v4"/></svg>',
-    globe: '<svg viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M5 2H2a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V8"/><path d="M8 1h4v4M7 6l5-5"/></svg>',
+    globe:
+      '<svg viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M5 2H2a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V8"/><path d="M8 1h4v4M7 6l5-5"/></svg>',
     stop: '<svg viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M2 2l9 9M11 2l-9 9"/></svg>',
   };
 
@@ -80,7 +85,10 @@
     const opts = { method, headers: { 'Content-Type': 'application/json' } };
     if (body) opts.body = JSON.stringify(body);
     const res = await fetch(path, opts);
-    if (!res.ok) { const e = await res.json().catch(() => ({ error: res.statusText })); throw new Error(e.error || `Failed (${res.status})`); }
+    if (!res.ok) {
+      const e = await res.json().catch(() => ({ error: res.statusText }));
+      throw new Error(e.error || `Failed (${res.status})`);
+    }
     return res.json();
   }
   const apiGet = (p) => api('GET', p);
@@ -92,9 +100,12 @@
     const t = document.createElement('div');
     t.className = `toast ${type}`;
     const ic = { success: '✓', error: '✕', info: '·' };
-    t.innerHTML = `<span class="toast-icon">${ic[type]||'·'}</span><span>${esc(msg)}</span>`;
+    t.innerHTML = `<span class="toast-icon">${ic[type] || '·'}</span><span>${esc(msg)}</span>`;
     dom.toastContainer.appendChild(t);
-    setTimeout(() => { t.style.animation = 'toastOut 0.22s ease forwards'; setTimeout(() => t.remove(), 220); }, 2800);
+    setTimeout(() => {
+      t.style.animation = 'toastOut 0.22s ease forwards';
+      setTimeout(() => t.remove(), 220);
+    }, 2800);
   }
 
   // ── Theme ──
@@ -109,20 +120,22 @@
     // Settings switcher
     const switcher = $('#themeSwitcherSettings');
     if (switcher) {
-      switcher.querySelectorAll('.theme-opt').forEach(btn => {
+      switcher.querySelectorAll('.theme-opt').forEach((btn) => {
         btn.addEventListener('click', () => {
           const theme = btn.dataset.theme;
           if (theme === 'system') {
-            applyTheme(window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            applyTheme(
+              window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+            );
           } else {
             applyTheme(theme);
           }
           localStorage.setItem('tunnel-theme', theme);
-          switcher.querySelectorAll('.theme-opt').forEach(b => b.classList.remove('active'));
+          switcher.querySelectorAll('.theme-opt').forEach((b) => b.classList.remove('active'));
           btn.classList.add('active');
         });
       });
-      switcher.querySelectorAll('.theme-opt').forEach(b => {
+      switcher.querySelectorAll('.theme-opt').forEach((b) => {
         b.classList.toggle('active', b.dataset.theme === saved);
       });
     }
@@ -134,7 +147,7 @@
 
   // ── Navigation ──
   function initNav() {
-    $$('.nav-btn[data-view]').forEach(btn => {
+    $$('.nav-btn[data-view]').forEach((btn) => {
       btn.addEventListener('click', () => {
         const view = btn.dataset.view;
         switchView(view);
@@ -144,8 +157,8 @@
 
   function switchView(view) {
     currentView = view;
-    $$('.nav-btn[data-view]').forEach(b => b.classList.toggle('active', b.dataset.view === view));
-    $$('.view').forEach(v => v.style.display = 'none');
+    $$('.nav-btn[data-view]').forEach((b) => b.classList.toggle('active', b.dataset.view === view));
+    $$('.view').forEach((v) => (v.style.display = 'none'));
     const el = $(`#view${view.charAt(0).toUpperCase() + view.slice(1)}`);
     if (el) el.style.display = '';
   }
@@ -169,17 +182,19 @@
       renderPorts();
       updateMetrics();
     } catch {
-      dom.portsList.innerHTML = '<div class="empty-state"><div class="empty-title">Failed to scan ports</div></div>';
+      dom.portsList.innerHTML =
+        '<div class="empty-state"><div class="empty-title">Failed to scan ports</div></div>';
     }
   }
 
   function renderPorts() {
     dom.portCountBadge.textContent = ports.length;
     if (!ports.length) {
-      dom.portsList.innerHTML = '<div class="empty-state"><div class="empty-icon"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1" y="2" width="14" height="12" rx="2"/><path d="M5 7h6M5 10h3"/></svg></div><div class="empty-title">No applications detected</div><div class="empty-sub">Start a dev server and refresh</div></div>';
+      dom.portsList.innerHTML =
+        '<div class="empty-state"><div class="empty-icon"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1" y="2" width="14" height="12" rx="2"/><path d="M5 7h6M5 10h3"/></svg></div><div class="empty-title">No applications detected</div><div class="empty-sub">Start a dev server and refresh</div></div>';
       return;
     }
-    dom.portsList.innerHTML = ports.map(p => portRowHTML(p) + editRowHTML(p)).join('');
+    dom.portsList.innerHTML = ports.map((p) => portRowHTML(p) + editRowHTML(p)).join('');
     bindPortActions();
   }
 
@@ -198,7 +213,7 @@
   }
 
   function bindPortActions() {
-    ports.forEach(p => {
+    ports.forEach((p) => {
       if (p.tunneled) return;
       $(`#expose-${p.port}`)?.addEventListener('click', () => quickExpose(p.port));
       $(`#edit-btn-${p.port}`)?.addEventListener('click', () => toggleEdit(p.port));
@@ -225,14 +240,24 @@
 
   async function quickExpose(port) {
     const btn = $(`#expose-${port}`);
-    if (btn) { btn.disabled = true; btn.textContent = 'Creating...'; }
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = 'Creating...';
+    }
     await createTunnel(port, port, false);
   }
 
   async function createTunnel(lp, ep, pub) {
     try {
-      const data = await apiPost('/api/tunnels', { localPort: lp, exposedPort: ep, exposeToInternet: pub });
-      showToast(data.tunnel.publicUrl ? `Public: ${data.tunnel.publicUrl}` : `Tunnel ${lp} → ${ep} created`, 'success');
+      const data = await apiPost('/api/tunnels', {
+        localPort: lp,
+        exposedPort: ep,
+        exposeToInternet: pub,
+      });
+      showToast(
+        data.tunnel.publicUrl ? `Public: ${data.tunnel.publicUrl}` : `Tunnel ${lp} → ${ep} created`,
+        'success'
+      );
       openEditPort = null;
       await Promise.all([fetchTunnels(), fetchPorts()]);
     } catch (err) {
@@ -256,9 +281,14 @@
     updateMetrics();
 
     const renderInto = (panel, empty) => {
-      if (!count) { panel.innerHTML = ''; panel.appendChild(empty); empty.style.display = ''; return; }
+      if (!count) {
+        panel.innerHTML = '';
+        panel.appendChild(empty);
+        empty.style.display = '';
+        return;
+      }
       empty.style.display = 'none';
-      const rows = tunnels.map(t => tunnelRowHTML(t)).join('');
+      const rows = tunnels.map((t) => tunnelRowHTML(t)).join('');
       panel.innerHTML = rows;
       bindTunnelActions(panel);
     };
@@ -278,11 +308,11 @@
   }
 
   function bindTunnelActions(container) {
-    container.querySelectorAll('.icon-btn[data-action]').forEach(btn => {
+    container.querySelectorAll('.icon-btn[data-action]').forEach((btn) => {
       btn.addEventListener('click', () => {
         const action = btn.dataset.action;
         const id = btn.dataset.id;
-        const t = tunnels.find(x => x.id === id);
+        const t = tunnels.find((x) => x.id === id);
         if (!t) return;
         if (action === 'copy') copyUrl(t);
         if (action === 'qr') showQR(id);
@@ -296,18 +326,27 @@
     try {
       const data = await apiGet('/api/tunnels');
       const sm = {};
-      tunnels.forEach(t => { sm[t.id] = t._status; });
-      tunnels = (data.tunnels || []).map(t => ({ ...t, _status: sm[t.id] || 'checking' }));
+      tunnels.forEach((t) => {
+        sm[t.id] = t._status;
+      });
+      tunnels = (data.tunnels || []).map((t) => ({ ...t, _status: sm[t.id] || 'checking' }));
       renderTunnels();
-    } catch { showToast('Failed to load tunnels', 'error'); }
+    } catch {
+      showToast('Failed to load tunnels', 'error');
+    }
   }
 
   async function toggleInternet(id, enable) {
     try {
       const data = await apiPost(`/api/tunnels/${id}/internet`, { enable });
-      showToast(data.publicUrl ? 'Public URL ready' : 'Public stopped', data.publicUrl ? 'success' : 'info');
+      showToast(
+        data.publicUrl ? 'Public URL ready' : 'Public stopped',
+        data.publicUrl ? 'success' : 'info'
+      );
       await fetchTunnels();
-    } catch (err) { showToast(err.message, 'error'); }
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
   }
 
   async function deleteTunnel(id) {
@@ -316,13 +355,28 @@
     try {
       await apiDelete(`/api/tunnels/${id}`);
       showToast('Tunnel stopped', 'info');
-      setTimeout(async () => { await Promise.all([fetchTunnels(), fetchPorts()]); }, 150);
-    } catch (err) { if (el) el.style.opacity = ''; showToast(err.message, 'error'); }
+      setTimeout(async () => {
+        await Promise.all([fetchTunnels(), fetchPorts()]);
+      }, 150);
+    } catch (err) {
+      if (el) el.style.opacity = '';
+      showToast(err.message, 'error');
+    }
   }
 
   async function copyUrl(t) {
     const url = t.publicUrl || `http://${primaryIP}:${t.exposedPort}`;
-    try { await navigator.clipboard.writeText(url); } catch { const a = document.createElement('textarea'); a.value = url; a.style.cssText = 'position:fixed;opacity:0'; document.body.appendChild(a); a.select(); document.execCommand('copy'); a.remove(); }
+    try {
+      await navigator.clipboard.writeText(url);
+    } catch {
+      const a = document.createElement('textarea');
+      a.value = url;
+      a.style.cssText = 'position:fixed;opacity:0';
+      document.body.appendChild(a);
+      a.select();
+      document.execCommand('copy');
+      a.remove();
+    }
     showToast('URL copied', 'success');
   }
 
@@ -331,17 +385,22 @@
     dom.modalUrl.textContent = '';
     dom.qrModal.classList.add('visible');
     try {
-      const t = tunnels.find(x => x.id === id);
+      const t = tunnels.find((x) => x.id === id);
       const type = t?.publicUrl ? 'public' : 'local';
       const data = await apiGet(`/api/tunnels/${id}/qr?type=${type}`);
       dom.qrContainer.innerHTML = data.qr || '<p>QR unavailable</p>';
       dom.modalUrl.textContent = data.url || '';
-    } catch { dom.qrContainer.innerHTML = '<p style="color:var(--red)">Failed</p>'; }
+    } catch {
+      dom.qrContainer.innerHTML = '<p style="color:var(--red)">Failed</p>';
+    }
   }
 
   function closeModal() {
     dom.qrModal.classList.remove('visible');
-    setTimeout(() => { dom.qrContainer.innerHTML = ''; dom.modalUrl.textContent = ''; }, 200);
+    setTimeout(() => {
+      dom.qrContainer.innerHTML = '';
+      dom.modalUrl.textContent = '';
+    }, 200);
   }
 
   // ── Metrics ──
@@ -365,13 +424,17 @@
     if (!container) return;
     // Ensure 7 bars
     const bars = Array(7).fill(0);
-    data.forEach((v, i) => { if (i < 7) bars[i] = v; });
+    data.forEach((v, i) => {
+      if (i < 7) bars[i] = v;
+    });
     const max = Math.max(...bars, 1);
-    container.innerHTML = bars.map(v => {
-      const pct = Math.max((v / max) * 100, 4); // minimum 4% so empty bars are visible
-      const hi = v >= max * 0.7 ? ' hi' : '';
-      return `<div class="spark-bar${hi}" style="height:${pct}%"></div>`;
-    }).join('');
+    container.innerHTML = bars
+      .map((v) => {
+        const pct = Math.max((v / max) * 100, 4); // minimum 4% so empty bars are visible
+        const hi = v >= max * 0.7 ? ' hi' : '';
+        return `<div class="spark-bar${hi}" style="height:${pct}%"></div>`;
+      })
+      .join('');
   }
 
   function updateMetrics() {
@@ -383,17 +446,22 @@
     const totalConns = tunnels.reduce((s, t) => s + (t.activeConnections || 0), 0);
 
     // Weighted avg latency
-    let avgLat = 0, p99 = 0;
+    let avgLat = 0,
+      p99 = 0;
     if (tunnels.length) {
-      const latencies = tunnels.filter(t => t.avgLatency > 0);
-      if (latencies.length) avgLat = Math.round(latencies.reduce((s, t) => s + t.avgLatency, 0) / latencies.length);
-      p99 = Math.max(...tunnels.map(t => t.latencyP99 || 0));
+      const latencies = tunnels.filter((t) => t.avgLatency > 0);
+      if (latencies.length)
+        avgLat = Math.round(latencies.reduce((s, t) => s + t.avgLatency, 0) / latencies.length);
+      p99 = Math.max(...tunnels.map((t) => t.latencyP99 || 0));
     }
 
     // Total Requests
-    if (totalReq > 9999) dom.metricRequests.innerHTML = (totalReq / 1000).toFixed(1) + '<span class="unit">k</span>';
+    if (totalReq > 9999)
+      dom.metricRequests.innerHTML = (totalReq / 1000).toFixed(1) + '<span class="unit">k</span>';
     else dom.metricRequests.textContent = totalReq;
-    dom.metricRequestsSub.textContent = tunnels.length ? `↑ across ${tunnels.length} tunnel${tunnels.length > 1 ? 's' : ''}` : 'No tunnels active';
+    dom.metricRequestsSub.textContent = tunnels.length
+      ? `↑ across ${tunnels.length} tunnel${tunnels.length > 1 ? 's' : ''}`
+      : 'No tunnels active';
 
     // Data Transferred
     dom.metricData.innerHTML = formatBytesHTML(totalBytes);
@@ -406,7 +474,9 @@
     // Active Tunnels
     const tc = tunnels.length;
     dom.metricTunnels.textContent = tc;
-    dom.metricTunnelsSub.textContent = tc ? `${tc} tunnel${tc > 1 ? 's' : ''} running` : 'No tunnels running';
+    dom.metricTunnelsSub.textContent = tc
+      ? `${tc} tunnel${tc > 1 ? 's' : ''} running`
+      : 'No tunnels running';
 
     // Active Connections
     dom.metricConns.textContent = totalConns;
@@ -421,7 +491,8 @@
     } else {
       const h = Math.floor(elapsed / 3600);
       const m = Math.floor((elapsed % 3600) / 60);
-      dom.metricUptime.innerHTML = h + '<span class="unit">h</span> ' + m + '<span class="unit">m</span>';
+      dom.metricUptime.innerHTML =
+        h + '<span class="unit">h</span> ' + m + '<span class="unit">m</span>';
     }
     dom.metricUptimeSub.textContent = 'Since launch';
 
@@ -437,9 +508,11 @@
 
   function mergeHistories(key) {
     const merged = Array(7).fill(0);
-    tunnels.forEach(t => {
+    tunnels.forEach((t) => {
       if (t.history && t.history[key]) {
-        t.history[key].forEach((v, i) => { if (i < 7) merged[i] += v; });
+        t.history[key].forEach((v, i) => {
+          if (i < 7) merged[i] += v;
+        });
       }
     });
     return merged;
@@ -448,18 +521,20 @@
   // ── Polling ──
   async function pollStatuses() {
     if (!tunnels.length) return;
-    const updates = await Promise.allSettled(tunnels.map(async t => {
-      const d = await apiGet(`/api/tunnels/${t.id}/status`);
-      return { id: t.id, status: d.status };
-    }));
-    updates.forEach(r => {
+    const updates = await Promise.allSettled(
+      tunnels.map(async (t) => {
+        const d = await apiGet(`/api/tunnels/${t.id}/status`);
+        return { id: t.id, status: d.status };
+      })
+    );
+    updates.forEach((r) => {
       if (r.status !== 'fulfilled') return;
       const { id, status } = r.value;
-      const t = tunnels.find(x => x.id === id);
+      const t = tunnels.find((x) => x.id === id);
       if (t && t._status !== status) {
         t._status = status;
         // Update dots in both panels
-        document.querySelectorAll(`#tunnel-${id} .tunnel-status-dot`).forEach(dot => {
+        document.querySelectorAll(`#tunnel-${id} .tunnel-status-dot`).forEach((dot) => {
           dot.className = `tunnel-status-dot ${status === 'online' ? 'green' : status === 'offline' ? 'red' : 'amber'}`;
         });
       }
@@ -472,8 +547,8 @@
       const fresh = data.tunnels || [];
       let rerender = false;
 
-      fresh.forEach(ft => {
-        const ex = tunnels.find(t => t.id === ft.id);
+      fresh.forEach((ft) => {
+        const ex = tunnels.find((t) => t.id === ft.id);
         if (ex) {
           // Copy ALL metrics fields
           ex.totalRequests = ft.totalRequests;
@@ -484,13 +559,18 @@
           ex.latencyP99 = ft.latencyP99;
           ex.history = ft.history;
           if (ex.internetActive !== ft.internetActive || ex.publicUrl !== ft.publicUrl) {
-            ex.internetActive = ft.internetActive; ex.publicUrl = ft.publicUrl; rerender = true;
+            ex.internetActive = ft.internetActive;
+            ex.publicUrl = ft.publicUrl;
+            rerender = true;
           }
         }
       });
 
       if (fresh.length !== tunnels.length || rerender) {
-        tunnels = fresh.map(ft => ({ ...ft, _status: tunnels.find(t => t.id === ft.id)?._status || 'checking' }));
+        tunnels = fresh.map((ft) => ({
+          ...ft,
+          _status: tunnels.find((t) => t.id === ft.id)?._status || 'checking',
+        }));
         renderTunnels();
       }
 
@@ -499,13 +579,21 @@
   }
 
   // ── Utility ──
-  function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+  function esc(s) {
+    const d = document.createElement('div');
+    d.textContent = s || '';
+    return d.innerHTML;
+  }
 
   // ── Events ──
   function bindEvents() {
     dom.modalClose.addEventListener('click', closeModal);
-    dom.qrModal.addEventListener('click', e => { if (e.target === dom.qrModal) closeModal(); });
-    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+    dom.qrModal.addEventListener('click', (e) => {
+      if (e.target === dom.qrModal) closeModal();
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeModal();
+    });
     dom.btnRefreshPorts.addEventListener('click', refreshPorts);
   }
 

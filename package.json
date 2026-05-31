@@ -6,6 +6,9 @@
   "scripts": {
     "start": "node index.js",
     "dev": "node index.js",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write \"src/**/*.js\" \"public/**/*.js\" \"public/**/*.css\" \"public/**/*.html\" \"electron/**/*.js\" \"index.js\"",
     "electron:dev": "electron .",
     "electron:build": "electron-builder",
     "electron:build:mac": "electron-builder --mac",
@@ -13,7 +16,14 @@
     "electron:build:linux": "electron-builder --linux",
     "postinstall": "electron-builder install-app-deps"
   },
-  "keywords": ["tunnel", "proxy", "localhost", "network", "lan", "electron"],
+  "keywords": [
+    "tunnel",
+    "proxy",
+    "localhost",
+    "network",
+    "lan",
+    "electron"
+  ],
   "author": "Tharindu Wijayarathna",
   "license": "MIT",
   "dependencies": {
@@ -25,7 +35,10 @@
   },
   "devDependencies": {
     "electron": "^35.0.0",
-    "electron-builder": "^26.0.0"
+    "electron-builder": "^26.0.0",
+    "eslint": "^10.4.1",
+    "eslint-config-prettier": "^10.1.8",
+    "prettier": "^3.8.3"
   },
   "build": {
     "appId": "com.tharindu.tunnel",
@@ -46,7 +59,9 @@
       "target": [
         {
           "target": "dmg",
-          "arch": ["universal"]
+          "arch": [
+            "universal"
+          ]
         }
       ]
     },
@@ -55,7 +70,10 @@
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64", "arm64"]
+          "arch": [
+            "x64",
+            "arm64"
+          ]
         }
       ]
     },
@@ -76,8 +94,16 @@
     "dmg": {
       "title": "Tunnel",
       "contents": [
-        { "x": 130, "y": 220 },
-        { "x": 410, "y": 220, "type": "link", "path": "/Applications" }
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
       ]
     }
   }

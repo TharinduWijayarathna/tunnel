@@ -14,9 +14,19 @@ function getNetworkInterfaces() {
         const lname = name.toLowerCase();
         let type = 'Other';
 
-        if (lname.includes('wi-fi') || lname.includes('wifi') || lname.includes('wlan') || lname === 'en0') {
+        if (
+          lname.includes('wi-fi') ||
+          lname.includes('wifi') ||
+          lname.includes('wlan') ||
+          lname === 'en0'
+        ) {
           type = 'WiFi';
-        } else if (lname.includes('eth') || lname === 'en1' || lname.startsWith('enp') || lname.startsWith('eno')) {
+        } else if (
+          lname.includes('eth') ||
+          lname === 'en1' ||
+          lname.startsWith('enp') ||
+          lname.startsWith('eno')
+        ) {
           type = 'Ethernet';
         } else if (lname.includes('bridge') || lname.includes('docker') || lname.includes('veth')) {
           type = 'Virtual';

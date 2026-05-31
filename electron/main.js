@@ -15,7 +15,7 @@ function getIconPath() {
 
 function createWindow() {
   const isMac = process.platform === 'darwin';
-  const isWin = process.platform === 'win32';
+  const _isWin = process.platform === 'win32';
 
   const windowOptions = {
     width: 1100,
@@ -120,7 +120,9 @@ async function startServer() {
 
       serverInstance.on('error', (err) => {
         if (err.code === 'EADDRINUSE') {
-          console.log(`[Tunnel] Port ${DASHBOARD_PORT} already in use, connecting to existing server`);
+          console.log(
+            `[Tunnel] Port ${DASHBOARD_PORT} already in use, connecting to existing server`
+          );
           resolve();
         } else {
           reject(err);
@@ -137,8 +139,8 @@ async function shutdown() {
   if (tunnelManagerInstance) {
     try {
       await tunnelManagerInstance.destroyAll();
-    } catch (e) {
-      console.error('[Tunnel] Error destroying tunnels:', e);
+    } catch (_e) {
+      console.error('[Tunnel] Error destroying tunnels:', _e);
     }
   }
   if (serverInstance) {

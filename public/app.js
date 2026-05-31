@@ -45,7 +45,6 @@
     statusIP: $('#statusIP'),
     activeTunnelCount: $('#activeTunnelCount'),
     footerPlatform: $('#footerPlatform'),
-    btnThemeToggle: $('#btnThemeToggle'),
     metricTunnels: $('#metricTunnels'),
     metricTunnelsSub: $('#metricTunnelsSub'),
     metricPorts: $('#metricPorts'),
@@ -90,16 +89,11 @@
   // ── Theme ──
   function initTheme() {
     const saved = localStorage.getItem('tunnel-theme') || 'dark';
-    applyTheme(saved);
-    updateThemeUI(saved);
-
-    dom.btnThemeToggle.addEventListener('click', () => {
-      const current = document.documentElement.getAttribute('data-theme') || 'dark';
-      const next = current === 'dark' ? 'light' : 'dark';
-      applyTheme(next);
-      updateThemeUI(next);
-      localStorage.setItem('tunnel-theme', next);
-    });
+    if (saved === 'system') {
+      applyTheme(window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    } else {
+      applyTheme(saved);
+    }
 
     // Settings switcher
     const switcher = $('#themeSwitcherSettings');
@@ -108,41 +102,23 @@
         btn.addEventListener('click', () => {
           const theme = btn.dataset.theme;
           if (theme === 'system') {
-            const sys = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-            applyTheme(sys);
-            updateThemeUI(sys);
-            localStorage.setItem('tunnel-theme', 'system');
+            applyTheme(window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
           } else {
             applyTheme(theme);
-            updateThemeUI(theme);
-            localStorage.setItem('tunnel-theme', theme);
           }
+          localStorage.setItem('tunnel-theme', theme);
           switcher.querySelectorAll('.theme-opt').forEach(b => b.classList.remove('active'));
           btn.classList.add('active');
         });
       });
-      // Set active
-      const savedTheme = localStorage.getItem('tunnel-theme') || 'dark';
       switcher.querySelectorAll('.theme-opt').forEach(b => {
-        b.classList.toggle('active', b.dataset.theme === savedTheme);
+        b.classList.toggle('active', b.dataset.theme === saved);
       });
     }
   }
 
   function applyTheme(theme) {
     document.documentElement.setAttribute('data-theme', theme);
-  }
-
-  function updateThemeUI(theme) {
-    const sunIcon = dom.btnThemeToggle.querySelector('.icon-sun');
-    const moonIcon = dom.btnThemeToggle.querySelector('.icon-moon');
-    if (theme === 'dark') {
-      sunIcon.style.display = '';
-      moonIcon.style.display = 'none';
-    } else {
-      sunIcon.style.display = 'none';
-      moonIcon.style.display = '';
-    }
   }
 
   // ── Navigation ──

@@ -54,7 +54,15 @@
     sparkRequests: $('#sparkRequests'),
     sparkData: $('#sparkData'),
     sparkLatency: $('#sparkLatency'),
+    metricTunnels: $('#metricTunnels'),
+    metricTunnelsSub: $('#metricTunnelsSub'),
+    metricConns: $('#metricConns'),
+    metricConnsSub: $('#metricConnsSub'),
+    metricUptime: $('#metricUptime'),
+    metricUptimeSub: $('#metricUptimeSub'),
   };
+
+  const launchTime = Date.now();
 
   // ── SVG Icons ──
   const icons = {
@@ -372,6 +380,7 @@
     const totalBytesIn = tunnels.reduce((s, t) => s + (t.bytesIn || 0), 0);
     const totalBytesOut = tunnels.reduce((s, t) => s + (t.bytesOut || 0), 0);
     const totalBytes = totalBytesIn + totalBytesOut;
+    const totalConns = tunnels.reduce((s, t) => s + (t.activeConnections || 0), 0);
 
     // Weighted avg latency
     let avgLat = 0, p99 = 0;
@@ -393,6 +402,28 @@
     // Avg Latency
     dom.metricLatency.innerHTML = avgLat + '<span class="unit">ms</span>';
     dom.metricLatencySub.textContent = `p99 — ${p99}ms`;
+
+    // Active Tunnels
+    const tc = tunnels.length;
+    dom.metricTunnels.textContent = tc;
+    dom.metricTunnelsSub.textContent = tc ? `${tc} tunnel${tc > 1 ? 's' : ''} running` : 'No tunnels running';
+
+    // Active Connections
+    dom.metricConns.textContent = totalConns;
+    dom.metricConnsSub.textContent = totalConns ? `${totalConns} open now` : 'No open connections';
+
+    // Uptime
+    const elapsed = Math.floor((Date.now() - launchTime) / 1000);
+    if (elapsed < 60) {
+      dom.metricUptime.innerHTML = elapsed + '<span class="unit">s</span>';
+    } else if (elapsed < 3600) {
+      dom.metricUptime.innerHTML = Math.floor(elapsed / 60) + '<span class="unit">m</span>';
+    } else {
+      const h = Math.floor(elapsed / 3600);
+      const m = Math.floor((elapsed % 3600) / 60);
+      dom.metricUptime.innerHTML = h + '<span class="unit">h</span> ' + m + '<span class="unit">m</span>';
+    }
+    dom.metricUptimeSub.textContent = 'Since launch';
 
     // Sparklines from history
     const mergedReqHistory = mergeHistories('requests');
@@ -436,24 +467,33 @@
   }
 
   async function pollStats() {
-    if (!tunnels.length) return;
     try {
       const data = await apiGet('/api/tunnels');
       const fresh = data.tunnels || [];
       let rerender = false;
+
       fresh.forEach(ft => {
         const ex = tunnels.find(t => t.id === ft.id);
         if (ex) {
+          // Copy ALL metrics fields
           ex.totalRequests = ft.totalRequests;
+          ex.activeConnections = ft.activeConnections;
+          ex.bytesIn = ft.bytesIn;
+          ex.bytesOut = ft.bytesOut;
+          ex.avgLatency = ft.avgLatency;
+          ex.latencyP99 = ft.latencyP99;
+          ex.history = ft.history;
           if (ex.internetActive !== ft.internetActive || ex.publicUrl !== ft.publicUrl) {
             ex.internetActive = ft.internetActive; ex.publicUrl = ft.publicUrl; rerender = true;
           }
         }
       });
+
       if (fresh.length !== tunnels.length || rerender) {
         tunnels = fresh.map(ft => ({ ...ft, _status: tunnels.find(t => t.id === ft.id)?._status || 'checking' }));
         renderTunnels();
       }
+
       updateMetrics();
     } catch {}
   }
@@ -480,8 +520,10 @@
     bindEvents();
 
     await Promise.all([fetchInterfaces(), fetchTunnels(), fetchPorts()]);
+    updateMetrics();
     setInterval(pollStatuses, 3000);
-    setInterval(pollStats, 5000);
+    setInterval(pollStats, 3000);
+    setInterval(updateMetrics, 1000); // tick uptime + refresh display
     pollStatuses();
   }
 

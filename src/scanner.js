@@ -1,54 +1,111 @@
 const { exec } = require('child_process');
 
-// Known system/desktop processes that should never be shown as exposable
+// ─── System processes to always hide (exact match, case-insensitive lookup) ───
+// Covers macOS, Windows, and Linux system/desktop processes
 const SYSTEM_PROCESSES = new Set([
-  'ControlCe',  // macOS Control Center
-  'Raycast',
-  'rapportd',   // macOS Rapport daemon
-  'sharingd',   // macOS sharing daemon
-  'AirPlayXPC', // AirPlay
-  'WiFiAgent',
-  'SystemUIServer',
-  'loginwindow',
-  'WindowServer',
-  'launchd',
-  'mDNSResponder',
-  'configd',
-  'UserEvent',
-  'com.apple',
-  'bluetoothd',
-  'remoted',
-  'identitys',
-  'coreautha',
-  'AMPDeviceD',
-  'AMPLibrar',
-  'Spotlight',
-  'Finder',
-  'Dock',
-  'Cursor',       // IDE internals
-  'Antigravi',    // This app's own helper
-  'Code',         // VS Code internals
-  'Code Helper',
-  'Electron',
-  'language_',    // Language servers (from IDEs)
-  'copilot-ag',
-  'gopls',
-  'typescript',
-  'eslint_d',
-  'biome',
+  // ── macOS ──
+  'ControlCe',  'Raycast',    'rapportd',     'sharingd',
+  'AirPlayXPC', 'WiFiAgent',  'SystemUIServer', 'loginwindow',
+  'WindowServer', 'launchd',  'mDNSResponder', 'configd',
+  'UserEvent',  'com.apple',  'bluetoothd',    'remoted',
+  'identitys',  'coreautha',  'AMPDeviceD',    'AMPLibrar',
+  'Spotlight',  'Finder',     'Dock',
+
+  // ── Windows core ──
+  'svchost',    'System',     'services',      'lsass',
+  'csrss',      'smss',       'wininit',       'winlogon',
+  'dwm',        'explorer',   'taskhostw',     'sihost',
+  'fontdrvhost', 'ctfmon',    'conhost',       'dllhost',
+  'RuntimeBroker', 'SearchHost', 'SearchIndexer', 'SearchUI',
+  'ShellExperienceHost', 'StartMenuExperienceHost',
+  'TextInputHost', 'SecurityHealthService', 'SecurityHealthSystray',
+  'MsMpEng',    'NisSrv',     'SgrmBroker',    'spoolsv',
+  'WmiPrvSE',   'WUDFHost',   'audiodg',       'dasHost',
+  'msdtc',      'TiWorker',   'TrustedInstaller', 'wuauclt',
+  'SearchProtocolHost', 'SearchFilterHost', 'backgroundTaskHost',
+  'CompatTelRunner', 'MusNotification', 'usocoreworker',
+  'LsaIso',     'Registry',   'Idle',          'Memory Compression',
+  'vmmem',      'vmcompute',  'vmwp',
+
+  // ── Windows vendor / OEM utilities ──
+  'asus_framework', 'ArmouryCrateControlInterface', 'ArmourySocketServer',
+  'ArmouryCrate', 'ArmouryCrate.Service', 'ArmourySwAgent',
+  'ASUS_Link', 'AsusOptimization', 'AsusCertService',
+  'RazerCentral', 'Razer Synapse', 'RzSDKService', 'RzSDKServer',
+  'iCUE',       'CorsairService', 'CorsairGamingAudioCfgService',
+  'NahimicService', 'NahimicSvc64', 'LGHUBUpdaterService',
+  'LogiOverlay', 'LogiOptionsMgr',
+
+  // ── Remote desktop / screen sharing (not dev servers) ──
+  'AnyDesk',    'TeamViewer',  'TeamViewer_Service',
+  'RustDesk',   'parsec',     'Parsec',
+
+  // ── Browsers (their listeners are internal, not dev) ──
+  'chrome',     'msedge',     'firefox',       'brave',
+  'opera',      'vivaldi',    'arc',
+
+  // ── IDE internals ──
+  'Cursor',     'Antigravi',  'Code',          'Code Helper',
+  'Electron',   'language_',  'copilot-ag',    'gopls',
+  'typescript', 'eslint_d',   'biome',
+
+  // ── Chat / productivity apps ──
+  'Slack',      'Discord',    'Spotify',       'zoom',
+  'Figma',      'Notion',     'Postman',       'Telegram',
+  'WhatsApp',   'Signal',     'Teams',         'Skype',
+  'OneDrive',   'Dropbox',    'iCloudService',
+
+  // ── Linux system ──
+  'systemd',    'systemd-resolved', 'systemd-networkd', 'systemd-logind',
+  'systemd-timesyncd', 'systemd-journald', 'systemd-udevd',
+  'dbus-daemon', 'dbus-broker',
+  'avahi-daemon', 'NetworkManager', 'wpa_supplicant',
+  'ModemManager', 'polkitd',   'udisksd',
+  'accounts-daemon', 'colord',  'rtkit-daemon',
+  'snapd',      'packagekitd', 'fwupd',
+  'thermald',   'irqbalance',  'cron',          'atd',
+  'cupsd',      'cups-browsed',
+  'gdm',        'gdm-session-worker', 'lightdm',
+  'gnome-shell', 'gnome-session-binary', 'gsd-',
+  'kwin_wayland', 'kwin_x11', 'plasmashell', 'kded5',
+  'Xorg',       'Xwayland',   'pulseaudio',    'pipewire',
+  'pipewire-pulse', 'wireplumber',
+  'sssd',       'nscd',       'rpcbind',       'rpc.statd',
 ]);
 
-// Process name patterns to exclude (regex-based)
+// ── Process name patterns to exclude (regex-based) ──
 const SYSTEM_PATTERNS = [
-  /^com\./i,        // macOS system services (com.apple.*, etc.)
+  // macOS
+  /^com\./i,              // com.apple.*, com.docker.*, etc.
   /^launchd/i,
   /^XPC/i,
-  /Helper$/i,       // Electron/Chrome helper processes
-  /^Google/i,       // Google Chrome internals
+
+  // Windows
+  /^svchost/i,            // svchost.exe and variants
+  /^System$/i,
+  /^PID:\d+$/i,           // Unresolved PIDs (couldn't get name)
+  /^Windows/i,            // Windows system processes
+  /^Microsoft\./i,        // Microsoft services
+  /^NVIDIA/i,             // GPU drivers
+  /^AMD/i,                // GPU drivers
+  /^Intel/i,              // Intel services
+  /^Realtek/i,            // Audio/network drivers
+  /^Dell/i,               // Dell utilities
+  /^HP/i,                 // HP utilities
+  /^Lenovo/i,             // Lenovo utilities
+  /^Asus/i,               // ASUS utilities
+  /^Armoury/i,            // ASUS Armoury Crate
+  /^Razer/i,              // Razer peripherals
+  /^Corsair/i,            // Corsair peripherals
+  /^Logitech/i,           // Logitech peripherals
+  /^Nahimic/i,            // Audio enhancer
+
+  // Browsers & Electron helper processes
+  /Helper$/i,             // *Helper (Electron/Chrome)
+  /^Google/i,
   /^Chromium/i,
   /^Firefox/i,
   /^Safari/i,
-  /^Microsoft/i,
   /^Slack/i,
   /^Discord/i,
   /^Spotify/i,
@@ -56,83 +113,110 @@ const SYSTEM_PATTERNS = [
   /^Figma/i,
   /^Notion/i,
   /^Postman/i,
+  /^Teams/i,
+  /^Skype/i,
+  /^OneDrive/i,
+  /^Dropbox/i,
+
+  // Linux desktop / system
+  /^gnome-/i,
+  /^gsd-/i,               // GNOME settings daemon
+  /^gvfs/i,               // GNOME virtual filesystem
+  /^xdg-/i,
+  /^dconf/i,
+  /^ibus/i,
+  /^fcitx/i,
+  /^at-spi/i,
+  /^tracker/i,            // GNOME Tracker indexer
+  /^evolution/i,          // GNOME evolution
+  /^kde/i,
+  /^plasma/i,
+  /^baloo/i,              // KDE file indexer
+  /^snap\./i,             // Snap packages (system)
 ];
 
-// Known developer-facing processes to always keep
+// ── Known developer-facing processes to always show ──
 const DEV_PROCESSES = new Set([
-  'node',
-  'nodemon',
-  'deno',
-  'bun',
-  'php',
-  'php84',
-  'php83',
-  'php82',
-  'php81',
-  'php80',
-  'php74',
-  'python',
-  'python3',
-  'python3.1',
-  'python3.12',
-  'python3.13',
-  'uvicorn',
-  'gunicorn',
-  'flask',
-  'django',
-  'ruby',
-  'rails',
-  'puma',
-  'unicorn',
-  'java',
-  'gradle',
-  'mvn',
-  'tomcat',
-  'spring',
-  'go',
-  'air',
-  'cargo',
-  'rustc',
+  // Node.js ecosystem
+  'node',       'nodemon',    'deno',          'bun',
+  'next-serv',  'vite',       'webpack',       'esbuild',
+  'turbo',      'serve',      'http-serv',     'live-serv',
+  'npm',        'yarn',       'pnpm',          'npx',
+
+  // PHP
+  'php',        'php84',      'php83',         'php82',
+  'php81',      'php80',      'php74',
+  'artisan',    'mix',
+
+  // Python
+  'python',     'python3',    'python3.1',     'python3.12',
+  'python3.13', 'uvicorn',    'gunicorn',      'flask',
+  'django',     'hypercorn',  'daphne',
+
+  // Ruby
+  'ruby',       'rails',      'puma',          'unicorn',
+
+  // Java / JVM
+  'java',       'gradle',     'mvn',           'tomcat',
+  'spring',     'kotlin',     'quarkus',
+
+  // Go
+  'go',         'air',
+
+  // Rust
+  'cargo',      'rustc',
+
+  // .NET
   'dotnet',
-  'nginx',
-  'httpd',
-  'apache',
-  'caddy',
-  'docker-pr',
-  'docker',
-  'mysqld',
-  'postgres',
-  'mongod',
-  'redis-ser',
-  'next-serv',
-  'vite',
-  'webpack',
-  'esbuild',
-  'turbo',
-  'serve',
-  'http-serv',
-  'live-serv',
-  'artisan',
-  'mix',
-  'npm',
-  'yarn',
-  'pnpm',
-  'npx',
+
+  // Web servers
+  'nginx',      'httpd',      'apache',        'apache2',
+  'caddy',      'lighttpd',   'traefik',
+
+  // Containers
+  'docker-pr',  'docker',     'podman',        'containerd',
+
+  // Databases
+  'mysqld',     'mysql',      'postgres',      'postgresql',
+  'mongod',     'mongos',     'redis-ser',     'redis-server',
+  'memcached',  'mariadbd',   'mariadb',
+  'sqlservr',   'sqlserver',  'SQLSERVR',      'mssql',
+
+  // Message queues
+  'rabbitmq',   'beam.smp',   'kafka',
+
+  // Other dev tools
+  'wp',         'drush',      'composer',
+  'hugo',       'jekyll',     'gatsby',
+  'elixir',     'mix',        'beam',
+  'erlang',
 ]);
 
 /**
  * Determines if a process is a developer-facing app worth showing.
+ * Uses a three-tier check: allow-list → deny-list → pattern deny-list.
  */
 function isDevProcess(processName) {
-  // Always include known dev processes
-  if (DEV_PROCESSES.has(processName)) return true;
+  if (!processName || processName === '-') return false;
 
-  // Always exclude known system processes
-  if (SYSTEM_PROCESSES.has(processName)) return false;
+  // Normalize: strip .exe suffix on Windows
+  const name = processName.replace(/\.exe$/i, '');
+
+  // Always include known dev processes
+  if (DEV_PROCESSES.has(name)) return true;
+
+  // Always exclude known system processes (case-insensitive)
+  if (SYSTEM_PROCESSES.has(name)) return false;
+
+  // Also check lowercase for case-insensitive matching
+  const lower = name.toLowerCase();
+  for (const sys of SYSTEM_PROCESSES) {
+    if (sys.toLowerCase() === lower) return false;
+  }
 
   // Exclude by pattern
   for (const pattern of SYSTEM_PATTERNS) {
-    if (pattern.test(processName)) return false;
+    if (pattern.test(name)) return false;
   }
 
   // For everything else, include it — better to show an unknown process

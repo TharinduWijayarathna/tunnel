@@ -45,12 +45,15 @@
     statusIP: $('#statusIP'),
     activeTunnelCount: $('#activeTunnelCount'),
     footerPlatform: $('#footerPlatform'),
-    metricTunnels: $('#metricTunnels'),
-    metricTunnelsSub: $('#metricTunnelsSub'),
-    metricPorts: $('#metricPorts'),
-    metricPortsSub: $('#metricPortsSub'),
     metricRequests: $('#metricRequests'),
     metricRequestsSub: $('#metricRequestsSub'),
+    metricData: $('#metricData'),
+    metricDataSub: $('#metricDataSub'),
+    metricLatency: $('#metricLatency'),
+    metricLatencySub: $('#metricLatencySub'),
+    sparkRequests: $('#sparkRequests'),
+    sparkData: $('#sparkData'),
+    sparkLatency: $('#sparkLatency'),
   };
 
   // ── SVG Icons ──
@@ -334,17 +337,81 @@
   }
 
   // ── Metrics ──
+  function formatBytes(b) {
+    if (b === 0) return '0B';
+    if (b < 1024) return b + 'B';
+    if (b < 1048576) return (b / 1024).toFixed(1) + 'KB';
+    if (b < 1073741824) return (b / 1048576).toFixed(1) + 'MB';
+    return (b / 1073741824).toFixed(2) + 'GB';
+  }
+
+  function formatBytesHTML(b) {
+    if (b === 0) return '0<span class="unit">B</span>';
+    if (b < 1024) return b + '<span class="unit">B</span>';
+    if (b < 1048576) return (b / 1024).toFixed(1) + '<span class="unit">KB</span>';
+    if (b < 1073741824) return (b / 1048576).toFixed(1) + '<span class="unit">MB</span>';
+    return (b / 1073741824).toFixed(2) + '<span class="unit">GB</span>';
+  }
+
+  function renderSparkline(container, data) {
+    if (!container) return;
+    // Ensure 7 bars
+    const bars = Array(7).fill(0);
+    data.forEach((v, i) => { if (i < 7) bars[i] = v; });
+    const max = Math.max(...bars, 1);
+    container.innerHTML = bars.map(v => {
+      const pct = Math.max((v / max) * 100, 4); // minimum 4% so empty bars are visible
+      const hi = v >= max * 0.7 ? ' hi' : '';
+      return `<div class="spark-bar${hi}" style="height:${pct}%"></div>`;
+    }).join('');
+  }
+
   function updateMetrics() {
-    const tc = tunnels.length;
-    dom.metricTunnels.textContent = tc;
-    dom.metricTunnelsSub.textContent = tc ? `${tc} tunnel${tc > 1 ? 's' : ''} running` : 'No tunnels running';
+    // Aggregate across all tunnels
+    const totalReq = tunnels.reduce((s, t) => s + (t.totalRequests || 0), 0);
+    const totalBytesIn = tunnels.reduce((s, t) => s + (t.bytesIn || 0), 0);
+    const totalBytesOut = tunnels.reduce((s, t) => s + (t.bytesOut || 0), 0);
+    const totalBytes = totalBytesIn + totalBytesOut;
 
-    dom.metricPorts.textContent = ports.length;
-    dom.metricPortsSub.textContent = ports.length ? `${ports.length} app${ports.length > 1 ? 's' : ''} detected` : 'No apps found';
+    // Weighted avg latency
+    let avgLat = 0, p99 = 0;
+    if (tunnels.length) {
+      const latencies = tunnels.filter(t => t.avgLatency > 0);
+      if (latencies.length) avgLat = Math.round(latencies.reduce((s, t) => s + t.avgLatency, 0) / latencies.length);
+      p99 = Math.max(...tunnels.map(t => t.latencyP99 || 0));
+    }
 
-    const totalReq = tunnels.reduce((sum, t) => sum + (t.totalRequests || 0), 0);
-    dom.metricRequests.textContent = totalReq > 999 ? `${(totalReq / 1000).toFixed(1)}k` : totalReq;
-    dom.metricRequestsSub.textContent = 'Across all tunnels';
+    // Total Requests
+    if (totalReq > 9999) dom.metricRequests.innerHTML = (totalReq / 1000).toFixed(1) + '<span class="unit">k</span>';
+    else dom.metricRequests.textContent = totalReq;
+    dom.metricRequestsSub.textContent = tunnels.length ? `↑ across ${tunnels.length} tunnel${tunnels.length > 1 ? 's' : ''}` : 'No tunnels active';
+
+    // Data Transferred
+    dom.metricData.innerHTML = formatBytesHTML(totalBytes);
+    dom.metricDataSub.textContent = `↑ TX ${formatBytes(totalBytesOut)} · RX ${formatBytes(totalBytesIn)}`;
+
+    // Avg Latency
+    dom.metricLatency.innerHTML = avgLat + '<span class="unit">ms</span>';
+    dom.metricLatencySub.textContent = `p99 — ${p99}ms`;
+
+    // Sparklines from history
+    const mergedReqHistory = mergeHistories('requests');
+    const mergedDataHistory = mergeHistories('bytesOut');
+    const mergedLatHistory = mergeHistories('latency');
+
+    renderSparkline(dom.sparkRequests, mergedReqHistory);
+    renderSparkline(dom.sparkData, mergedDataHistory);
+    renderSparkline(dom.sparkLatency, mergedLatHistory);
+  }
+
+  function mergeHistories(key) {
+    const merged = Array(7).fill(0);
+    tunnels.forEach(t => {
+      if (t.history && t.history[key]) {
+        t.history[key].forEach((v, i) => { if (i < 7) merged[i] += v; });
+      }
+    });
+    return merged;
   }
 
   // ── Polling ──

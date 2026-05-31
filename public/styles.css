@@ -297,6 +297,17 @@ body.platform-darwin .titlebar { padding-left: 80px; }
 .metric-value .unit { font-size: 11px; color: var(--text-2); margin-left: 2px; }
 .metric-sub { font-size: 10px; font-family: var(--font-mono); color: var(--text-2); margin-top: 6px; }
 
+/* ── Sparkline bar charts ── */
+.sparkline { display: flex; align-items: flex-end; gap: 3px; height: 24px; margin-top: 10px; }
+.spark-bar {
+  flex: 1; min-width: 0; border-radius: 2px 2px 0 0;
+  background: var(--accent-dim);
+  transition: height 0.4s ease;
+}
+.spark-bar.hi { background: rgba(124,111,247,0.5); }
+[data-theme="light"] .spark-bar { background: rgba(109,93,230,0.15); }
+[data-theme="light"] .spark-bar.hi { background: rgba(109,93,230,0.35); }
+
 /* ════════════════════════════════════════════════
    APP ROWS (Running Applications)
    ════════════════════════════════════════════════ */

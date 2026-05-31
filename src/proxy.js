@@ -43,6 +43,39 @@ class TunnelManager {
     // Track connections for stats
     let totalRequests = 0;
     let activeConnections = 0;
+    let bytesIn = 0;
+    let bytesOut = 0;
+    let latencySum = 0;
+    let latencyCount = 0;
+    let latencyP99 = 0;
+    const recentLatencies = [];
+
+    // History for sparkline (7 buckets, refreshed every 10s)
+    const history = { requests: [], bytesOut: [], latency: [] };
+    let historySnapshotReqs = 0;
+    let historySnapshotBytes = 0;
+    let historySnapshotLatCount = 0;
+    let historySnapshotLatSum = 0;
+    const historyInterval = setInterval(() => {
+      const reqDelta = totalRequests - historySnapshotReqs;
+      const bytesDelta = bytesOut - historySnapshotBytes;
+      const latDelta = latencyCount - historySnapshotLatCount;
+      const avgLat = latDelta > 0 ? Math.round((latencySum - historySnapshotLatSum) / latDelta) : 0;
+
+      history.requests.push(reqDelta);
+      history.bytesOut.push(bytesDelta);
+      history.latency.push(avgLat);
+
+      // Keep only last 7
+      if (history.requests.length > 7) history.requests.shift();
+      if (history.bytesOut.length > 7) history.bytesOut.shift();
+      if (history.latency.length > 7) history.latency.shift();
+
+      historySnapshotReqs = totalRequests;
+      historySnapshotBytes = bytesOut;
+      historySnapshotLatCount = latencyCount;
+      historySnapshotLatSum = latencySum;
+    }, 10000);
 
     proxy.on('error', (err, req, res) => {
       if (res && typeof res.writeHead === 'function' && !res.headersSent) {
@@ -52,10 +85,36 @@ class TunnelManager {
     });
 
     const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
+      const start = Date.now();
       totalRequests++;
       activeConnections++;
+
+      // Track incoming bytes
+      req.on('data', (chunk) => { bytesIn += chunk.length; });
+
+      // Track outgoing bytes and latency
+      const origWrite = res.write.bind(res);
+      const origEnd = res.end.bind(res);
+
+      res.write = function(chunk, ...args) {
+        if (chunk) bytesOut += Buffer.byteLength(chunk);
+        return origWrite(chunk, ...args);
+      };
+      res.end = function(chunk, ...args) {
+        if (chunk) bytesOut += Buffer.byteLength(chunk);
+        return origEnd(chunk, ...args);
+      };
+
       res.on('finish', () => {
         activeConnections--;
+        const elapsed = Date.now() - start;
+        latencySum += elapsed;
+        latencyCount++;
+        recentLatencies.push(elapsed);
+        if (recentLatencies.length > 100) recentLatencies.shift();
+        // P99
+        const sorted = [...recentLatencies].sort((a, b) => a - b);
+        latencyP99 = sorted[Math.floor(sorted.length * 0.99)] || 0;
       });
       proxy.web(req, res);
     });
@@ -84,7 +143,14 @@ class TunnelManager {
           proxy,
           internetTunnel: null,
           publicUrl: null,
-          getStats: () => ({ totalRequests, activeConnections }),
+          historyInterval,
+          getStats: () => ({
+            totalRequests, activeConnections,
+            bytesIn, bytesOut,
+            avgLatency: latencyCount > 0 ? Math.round(latencySum / latencyCount) : 0,
+            latencyP99,
+            history,
+          }),
         };
 
         this.tunnels.set(id, tunnel);
@@ -177,6 +243,11 @@ class TunnelManager {
         tunnel.internetTunnel.close();
       }
 
+      // Stop metrics collection
+      if (tunnel.historyInterval) {
+        clearInterval(tunnel.historyInterval);
+      }
+
       tunnel.proxy.close();
       tunnel.server.close(() => {
         this.tunnels.delete(id);
@@ -199,6 +270,11 @@ class TunnelManager {
         createdAt: tunnel.createdAt,
         totalRequests: stats.totalRequests,
         activeConnections: stats.activeConnections,
+        bytesIn: stats.bytesIn,
+        bytesOut: stats.bytesOut,
+        avgLatency: stats.avgLatency,
+        latencyP99: stats.latencyP99,
+        history: stats.history,
         publicUrl: tunnel.publicUrl,
         internetActive: !!tunnel.internetTunnel,
       });

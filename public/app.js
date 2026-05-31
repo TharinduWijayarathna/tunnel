@@ -1,202 +1,262 @@
 /* ============================================
    Tunnel — Desktop Application Frontend
    ============================================ */
-
 (() => {
   'use strict';
 
-  // ---------- State ----------
+  // ── State ──
   let primaryIP = '';
   let tunnels = [];
   let ports = [];
   let openEditPort = null;
+  let currentView = 'dashboard';
 
-  // ---------- Platform Detection ----------
-  const platform = (window.tunnelApp && window.tunnelApp.platform) || detectPlatform();
-
-  function detectPlatform() {
+  // ── Platform ──
+  const platform = (window.tunnelApp && window.tunnelApp.platform) || (() => {
     const ua = navigator.userAgent.toLowerCase();
     if (ua.includes('mac')) return 'darwin';
     if (ua.includes('win')) return 'win32';
     return 'linux';
-  }
+  })();
+  const platformLabel = platform === 'darwin' ? 'macOS' : platform === 'win32' ? 'Windows' : 'Linux';
 
-  function getPlatformLabel() {
-    switch (platform) {
-      case 'darwin': return 'macOS';
-      case 'win32': return 'Windows';
-      default: return 'Linux';
-    }
-  }
-
-  // ---------- DOM References ----------
-  const $ = (sel) => document.querySelector(sel);
+  // ── DOM ──
+  const $ = (s) => document.querySelector(s);
+  const $$ = (s) => document.querySelectorAll(s);
 
   const dom = {
     networkInfo: $('#networkInfo'),
-    tunnelsGrid: $('#tunnelsGrid'),
+    portsList: $('#portsList'),
+    portsEmpty: $('#portsEmpty'),
+    portCountBadge: $('#portCountBadge'),
+    tunnelsPanel: $('#tunnelsPanel'),
+    tunnelsPanelAlt: $('#tunnelsPanelAlt'),
     tunnelCount: $('#tunnelCount'),
+    tunnelCountAlt: $('#tunnelCountAlt'),
     emptyState: $('#emptyState'),
+    emptyStateAlt: $('#emptyStateAlt'),
     qrModal: $('#qrModal'),
     modalClose: $('#modalClose'),
     qrContainer: $('#qrContainer'),
     modalUrl: $('#modalUrl'),
     toastContainer: $('#toastContainer'),
-    portsList: $('#portsList'),
     btnRefreshPorts: $('#btnRefreshPorts'),
     statusPlatform: $('#statusPlatform'),
     statusIP: $('#statusIP'),
     activeTunnelCount: $('#activeTunnelCount'),
     footerPlatform: $('#footerPlatform'),
+    btnThemeToggle: $('#btnThemeToggle'),
+    metricTunnels: $('#metricTunnels'),
+    metricTunnelsSub: $('#metricTunnelsSub'),
+    metricPorts: $('#metricPorts'),
+    metricPortsSub: $('#metricPortsSub'),
+    metricRequests: $('#metricRequests'),
+    metricRequestsSub: $('#metricRequestsSub'),
   };
 
-  // ---------- SVG Icons ----------
+  // ── SVG Icons ──
   const icons = {
-    arrow: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>',
-    check: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>',
-    edit: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>',
+    arrow: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>',
+    check: '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>',
+    edit: '<svg viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M7 2l4 4-7 7H0V9l7-7z"/></svg>',
+    copy: '<svg viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="4" y="4" width="8" height="8" rx="1.2"/><path d="M9 4V2.5A1.5 1.5 0 0 0 7.5 1H2.5A1.5 1.5 0 0 0 1 2.5v5A1.5 1.5 0 0 0 2.5 9H4"/></svg>',
+    qr: '<svg viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="1" y="1" width="4" height="4" rx=".5"/><rect x="8" y="1" width="4" height="4" rx=".5"/><rect x="1" y="8" width="4" height="4" rx=".5"/><path d="M8 8h4v4"/></svg>',
+    globe: '<svg viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M5 2H2a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V8"/><path d="M8 1h4v4M7 6l5-5"/></svg>',
+    stop: '<svg viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M2 2l9 9M11 2l-9 9"/></svg>',
   };
 
-  // ---------- API Helpers ----------
+  // ── API ──
   async function api(method, path, body) {
-    const options = { method, headers: { 'Content-Type': 'application/json' } };
-    if (body) options.body = JSON.stringify(body);
-    const res = await fetch(path, options);
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ error: res.statusText }));
-      throw new Error(err.error || `Request failed (${res.status})`);
-    }
+    const opts = { method, headers: { 'Content-Type': 'application/json' } };
+    if (body) opts.body = JSON.stringify(body);
+    const res = await fetch(path, opts);
+    if (!res.ok) { const e = await res.json().catch(() => ({ error: res.statusText })); throw new Error(e.error || `Failed (${res.status})`); }
     return res.json();
   }
+  const apiGet = (p) => api('GET', p);
+  const apiPost = (p, b) => api('POST', p, b);
+  const apiDelete = (p) => api('DELETE', p);
 
-  const apiGet = (path) => api('GET', path);
-  const apiPost = (path, body) => api('POST', path, body);
-  const apiDelete = (path) => api('DELETE', path);
-
-  // ---------- Toast ----------
-  function showToast(message, type = 'info') {
-    const toast = document.createElement('div');
-    toast.className = `toast ${type}`;
-    const ti = { success: '✓', error: '✕', info: '·' };
-    toast.innerHTML = `<span class="toast-icon">${ti[type] || '·'}</span><span>${escapeHtml(message)}</span>`;
-    dom.toastContainer.appendChild(toast);
-    setTimeout(() => {
-      toast.style.animation = 'toast-out 0.22s ease forwards';
-      setTimeout(() => toast.remove(), 220);
-    }, 2800);
+  // ── Toast ──
+  function showToast(msg, type = 'info') {
+    const t = document.createElement('div');
+    t.className = `toast ${type}`;
+    const ic = { success: '✓', error: '✕', info: '·' };
+    t.innerHTML = `<span class="toast-icon">${ic[type]||'·'}</span><span>${esc(msg)}</span>`;
+    dom.toastContainer.appendChild(t);
+    setTimeout(() => { t.style.animation = 'toastOut 0.22s ease forwards'; setTimeout(() => t.remove(), 220); }, 2800);
   }
 
-  // ---------- Network Info ----------
+  // ── Theme ──
+  function initTheme() {
+    const saved = localStorage.getItem('tunnel-theme') || 'dark';
+    applyTheme(saved);
+    updateThemeUI(saved);
+
+    dom.btnThemeToggle.addEventListener('click', () => {
+      const current = document.documentElement.getAttribute('data-theme') || 'dark';
+      const next = current === 'dark' ? 'light' : 'dark';
+      applyTheme(next);
+      updateThemeUI(next);
+      localStorage.setItem('tunnel-theme', next);
+    });
+
+    // Settings switcher
+    const switcher = $('#themeSwitcherSettings');
+    if (switcher) {
+      switcher.querySelectorAll('.theme-opt').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const theme = btn.dataset.theme;
+          if (theme === 'system') {
+            const sys = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+            applyTheme(sys);
+            updateThemeUI(sys);
+            localStorage.setItem('tunnel-theme', 'system');
+          } else {
+            applyTheme(theme);
+            updateThemeUI(theme);
+            localStorage.setItem('tunnel-theme', theme);
+          }
+          switcher.querySelectorAll('.theme-opt').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+        });
+      });
+      // Set active
+      const savedTheme = localStorage.getItem('tunnel-theme') || 'dark';
+      switcher.querySelectorAll('.theme-opt').forEach(b => {
+        b.classList.toggle('active', b.dataset.theme === savedTheme);
+      });
+    }
+  }
+
+  function applyTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+  }
+
+  function updateThemeUI(theme) {
+    const sunIcon = dom.btnThemeToggle.querySelector('.icon-sun');
+    const moonIcon = dom.btnThemeToggle.querySelector('.icon-moon');
+    if (theme === 'dark') {
+      sunIcon.style.display = '';
+      moonIcon.style.display = 'none';
+    } else {
+      sunIcon.style.display = 'none';
+      moonIcon.style.display = '';
+    }
+  }
+
+  // ── Navigation ──
+  function initNav() {
+    $$('.nav-btn[data-view]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const view = btn.dataset.view;
+        switchView(view);
+      });
+    });
+  }
+
+  function switchView(view) {
+    currentView = view;
+    $$('.nav-btn[data-view]').forEach(b => b.classList.toggle('active', b.dataset.view === view));
+    $$('.view').forEach(v => v.style.display = 'none');
+    const el = $(`#view${view.charAt(0).toUpperCase() + view.slice(1)}`);
+    if (el) el.style.display = '';
+  }
+
+  // ── Network ──
   async function fetchInterfaces() {
     try {
       const data = await apiGet('/api/interfaces');
       primaryIP = data.primaryIP || '';
-      renderNetworkInfo(data.interfaces || [], data.primaryIP);
-      dom.statusIP.textContent = primaryIP || 'No network';
-    } catch (err) {
-      console.error('Failed to fetch interfaces:', err);
-      dom.networkInfo.innerHTML = `<div class="network-chip"><span class="ip">Offline</span></div>`;
+      dom.statusIP.textContent = primaryIP || 'Offline';
+      renderNetworkPills(data.interfaces || [], data.primaryIP);
+    } catch {
+      dom.networkInfo.innerHTML = `<div class="ip-pill"><span class="ip-dot" style="background:var(--red)"></span>Offline</div>`;
       dom.statusIP.textContent = 'Offline';
     }
   }
 
-  function renderNetworkInfo(interfaces, primary) {
-    if (!interfaces.length) {
-      dom.networkInfo.innerHTML = `<div class="network-chip"><span class="ip">No network</span></div>`;
-      return;
-    }
-    const badges = interfaces
-      .filter((i) => i.ip && i.ip !== '127.0.0.1')
-      .map((i) => {
-        const isPrimary = i.ip === primary;
-        return `<div class="network-chip" title="${i.name} (${i.type || '?'})">${isPrimary ? '<span class="dot"></span>' : ''}<span class="ip">${i.ip}</span></div>`;
-      })
-      .join('');
-    dom.networkInfo.innerHTML = badges || `<div class="network-chip"><span class="ip">No external IPs</span></div>`;
+  function renderNetworkPills(interfaces, primary) {
+    const ext = interfaces.filter(i => i.ip && i.ip !== '127.0.0.1');
+    if (!ext.length) { dom.networkInfo.innerHTML = ''; return; }
+    dom.networkInfo.innerHTML = ext.map(i => {
+      const isPrimary = i.ip === primary;
+      return `<div class="ip-pill" title="${i.name}">${isPrimary ? '<span class="ip-dot"></span>' : ''}${i.ip}</div>`;
+    }).join('');
   }
 
-  // ---------- Port Scanner ----------
+  // ── Ports ──
   async function fetchPorts() {
     try {
       const data = await apiGet('/api/ports');
       ports = data.ports || [];
       renderPorts();
-    } catch (err) {
-      console.error('Failed to fetch ports:', err);
-      dom.portsList.innerHTML = '<div class="ports-empty">Failed to scan ports</div>';
+      updateMetrics();
+    } catch {
+      dom.portsList.innerHTML = '<div class="empty-state"><div class="empty-title">Failed to scan ports</div></div>';
     }
   }
 
   function renderPorts() {
+    dom.portCountBadge.textContent = ports.length;
     if (!ports.length) {
-      dom.portsList.innerHTML = '<div class="ports-empty">No listening applications detected</div>';
+      dom.portsList.innerHTML = '<div class="empty-state"><div class="empty-icon"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1" y="2" width="14" height="12" rx="2"/><path d="M5 7h6M5 10h3"/></svg></div><div class="empty-title">No applications detected</div><div class="empty-sub">Start a dev server and refresh</div></div>';
       return;
     }
-    dom.portsList.innerHTML = ports.map((p) => portRowHTML(p) + portEditRowHTML(p)).join('');
+    dom.portsList.innerHTML = ports.map(p => portRowHTML(p) + editRowHTML(p)).join('');
     bindPortActions();
   }
 
-  function portRowHTML(port) {
-    let actionHTML;
-    if (port.tunneled) {
-      actionHTML = `<span class="port-tunneled-badge">${icons.check} Tunneled</span>`;
-    } else {
-      actionHTML = `<div class="port-actions"><button class="btn-port-edit" id="edit-btn-${port.port}" title="Configure">${icons.edit}</button><button class="btn-expose" id="expose-${port.port}">Expose ${icons.arrow}</button></div>`;
-    }
-    return `<div class="port-row" id="port-row-${port.port}"><span class="port-dot"></span><span class="port-process">${escapeHtml(port.process)}</span><span class="port-number">:${port.port}</span><span class="port-user">${escapeHtml(port.user)}</span><span class="port-pid">PID ${port.pid}</span>${actionHTML}</div>`;
+  function portRowHTML(p) {
+    const initial = p.process.charAt(0).toUpperCase();
+    const action = p.tunneled
+      ? `<span class="tunneled-badge">${icons.check} Tunneled</span>`
+      : `<button class="edit-btn" id="edit-btn-${p.port}" title="Configure">${icons.edit}</button><button class="expose-btn" id="expose-${p.port}">Expose</button>`;
+    return `<div class="app-row"><div class="app-icon">${initial}</div><div class="app-info"><div class="app-name">${esc(p.process)}</div><div class="app-meta">PID ${p.pid} · ${esc(p.user)}</div></div><span class="app-port">:${p.port}</span>${action}</div>`;
   }
 
-  function portEditRowHTML(port) {
-    if (port.tunneled) return '';
-    const isOpen = openEditPort === port.port;
-    return `<div class="port-edit-row ${isOpen ? 'visible' : ''}" id="edit-row-${port.port}"><label>Exposed port</label><input type="number" id="edit-exposed-${port.port}" value="${port.port}" min="1" max="65535"><div class="toggle-mini"><label class="toggle-switch-sm" for="edit-internet-${port.port}"><input type="checkbox" id="edit-internet-${port.port}"><span class="toggle-slider-sm"></span></label><span class="toggle-mini-label">Public</span></div><button class="btn-expose-confirm" id="edit-confirm-${port.port}">Expose ${icons.arrow}</button></div>`;
+  function editRowHTML(p) {
+    if (p.tunneled) return '';
+    const open = openEditPort === p.port;
+    return `<div class="edit-row ${open ? 'visible' : ''}" id="edit-row-${p.port}"><label>Port</label><input type="number" id="edit-exposed-${p.port}" value="${p.port}" min="1" max="65535"><div class="toggle-mini"><label class="toggle-switch-sm" for="edit-internet-${p.port}"><input type="checkbox" id="edit-internet-${p.port}"><span class="toggle-slider-sm"></span></label><span class="toggle-mini-label">Public</span></div><button class="edit-confirm" id="edit-confirm-${p.port}">Expose ${icons.arrow}</button></div>`;
   }
 
   function bindPortActions() {
-    ports.forEach((p) => {
+    ports.forEach(p => {
       if (p.tunneled) return;
-      const exposeBtn = $(`#expose-${p.port}`);
-      const editBtn = $(`#edit-btn-${p.port}`);
-      const confirmBtn = $(`#edit-confirm-${p.port}`);
-      if (exposeBtn) exposeBtn.addEventListener('click', () => quickExpose(p.port));
-      if (editBtn) editBtn.addEventListener('click', () => toggleEditRow(p.port));
-      if (confirmBtn) confirmBtn.addEventListener('click', () => {
-        const exposedPort = parseInt($(`#edit-exposed-${p.port}`)?.value, 10) || p.port;
-        const internet = $(`#edit-internet-${p.port}`)?.checked || false;
-        createTunnel(p.port, exposedPort, internet);
+      $(`#expose-${p.port}`)?.addEventListener('click', () => quickExpose(p.port));
+      $(`#edit-btn-${p.port}`)?.addEventListener('click', () => toggleEdit(p.port));
+      $(`#edit-confirm-${p.port}`)?.addEventListener('click', () => {
+        const ep = parseInt($(`#edit-exposed-${p.port}`)?.value, 10) || p.port;
+        const pub = $(`#edit-internet-${p.port}`)?.checked || false;
+        createTunnel(p.port, ep, pub);
       });
     });
   }
 
-  function toggleEditRow(port) {
+  function toggleEdit(port) {
+    if (openEditPort && openEditPort !== port) {
+      $(`#edit-row-${openEditPort}`)?.classList.remove('visible');
+      $(`#edit-btn-${openEditPort}`)?.classList.remove('active');
+    }
     const row = $(`#edit-row-${port}`);
     const btn = $(`#edit-btn-${port}`);
-    if (!row) return;
-    if (openEditPort && openEditPort !== port) {
-      const prev = $(`#edit-row-${openEditPort}`);
-      const prevBtn = $(`#edit-btn-${openEditPort}`);
-      if (prev) prev.classList.remove('visible');
-      if (prevBtn) prevBtn.classList.remove('active');
-    }
-    const isOpen = row.classList.contains('visible');
-    row.classList.toggle('visible');
-    if (btn) btn.classList.toggle('active');
+    const isOpen = row?.classList.contains('visible');
+    row?.classList.toggle('visible');
+    btn?.classList.toggle('active');
     openEditPort = isOpen ? null : port;
   }
 
   async function quickExpose(port) {
     const btn = $(`#expose-${port}`);
-    if (btn) { btn.disabled = true; btn.innerHTML = 'Creating...'; }
+    if (btn) { btn.disabled = true; btn.textContent = 'Creating...'; }
     await createTunnel(port, port, false);
   }
 
-  async function createTunnel(localPort, exposedPort, exposeToInternet) {
+  async function createTunnel(lp, ep, pub) {
     try {
-      const data = await apiPost('/api/tunnels', { localPort, exposedPort, exposeToInternet });
-      const msg = data.tunnel.publicUrl
-        ? `Tunnel live! Public: ${data.tunnel.publicUrl}`
-        : `Tunnel created — port ${localPort} → ${exposedPort}`;
-      showToast(msg, 'success');
+      const data = await apiPost('/api/tunnels', { localPort: lp, exposedPort: ep, exposeToInternet: pub });
+      showToast(data.tunnel.publicUrl ? `Public: ${data.tunnel.publicUrl}` : `Tunnel ${lp} → ${ep} created`, 'success');
       openEditPort = null;
       await Promise.all([fetchTunnels(), fetchPorts()]);
     } catch (err) {
@@ -211,135 +271,96 @@
     setTimeout(() => dom.btnRefreshPorts.classList.remove('spinning'), 600);
   }
 
-  // ---------- Tunnel Rendering ----------
-  function updateTunnelCounts() {
+  // ── Tunnels ──
+  function renderTunnels() {
     const count = tunnels.length;
     dom.tunnelCount.textContent = count;
-    dom.activeTunnelCount.textContent = count;
+    dom.tunnelCountAlt.textContent = count;
+    dom.activeTunnelCount.textContent = `${count} active`;
+    updateMetrics();
+
+    const renderInto = (panel, empty) => {
+      if (!count) { panel.innerHTML = ''; panel.appendChild(empty); empty.style.display = ''; return; }
+      empty.style.display = 'none';
+      const rows = tunnels.map(t => tunnelRowHTML(t)).join('');
+      panel.innerHTML = rows;
+      bindTunnelActions(panel);
+    };
+
+    renderInto(dom.tunnelsPanel, dom.emptyState);
+    renderInto(dom.tunnelsPanelAlt, dom.emptyStateAlt);
   }
 
-  function renderTunnels() {
-    updateTunnelCounts();
-    if (tunnels.length === 0) {
-      dom.tunnelsGrid.innerHTML = '';
-      dom.emptyState.classList.add('visible');
-      return;
-    }
-    dom.emptyState.classList.remove('visible');
-    dom.tunnelsGrid.innerHTML = tunnels.map((t, i) => tunnelCardHTML(t, i)).join('');
-    tunnels.forEach((t) => {
-      const copyBtn = $(`#copy-${t.id}`);
-      const qrBtn = $(`#qr-${t.id}`);
-      const deleteBtn = $(`#delete-${t.id}`);
-      const internetBtn = $(`#internet-${t.id}`);
-      if (copyBtn) copyBtn.addEventListener('click', () => copyUrl(t, t.publicUrl ? 'public' : 'local'));
-      if (qrBtn) qrBtn.addEventListener('click', () => showQR(t.id));
-      if (deleteBtn) deleteBtn.addEventListener('click', () => deleteTunnel(t.id));
-      if (internetBtn) internetBtn.addEventListener('click', () => toggleInternet(t.id, !t.internetActive));
+  function tunnelRowHTML(t) {
+    const sc = t._status || 'checking';
+    const dotClass = sc === 'online' ? 'green' : sc === 'offline' ? 'red' : 'amber';
+    const url = t.publicUrl || `http://${primaryIP}:${t.exposedPort}`;
+    const internetPill = t.publicUrl ? '<span class="internet-pill">Public</span>' : '';
+    const internetLabel = t.internetActive ? 'Stop Public' : 'Go Public';
+
+    return `<div class="tunnel-row" id="tunnel-${t.id}"><div class="tunnel-status-dot ${dotClass}"></div><div class="tunnel-info"><div class="tunnel-name">${t.localPort} <span style="color:var(--text-2);font-size:11px">→</span> ${t.exposedPort}${internetPill}</div><div class="tunnel-url">${url}</div></div><div class="tunnel-actions"><button class="icon-btn" data-action="copy" data-id="${t.id}" title="Copy URL">${icons.copy}</button><button class="icon-btn" data-action="internet" data-id="${t.id}" title="${internetLabel}">${icons.globe}</button><button class="icon-btn" data-action="qr" data-id="${t.id}" title="QR Code">${icons.qr}</button><button class="icon-btn danger" data-action="delete" data-id="${t.id}" title="Stop">${icons.stop}</button></div></div>`;
+  }
+
+  function bindTunnelActions(container) {
+    container.querySelectorAll('.icon-btn[data-action]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const action = btn.dataset.action;
+        const id = btn.dataset.id;
+        const t = tunnels.find(x => x.id === id);
+        if (!t) return;
+        if (action === 'copy') copyUrl(t);
+        if (action === 'qr') showQR(id);
+        if (action === 'delete') deleteTunnel(id);
+        if (action === 'internet') toggleInternet(id, !t.internetActive);
+      });
     });
   }
 
-  function tunnelCardHTML(tunnel, index) {
-    const localUrl = `http://${primaryIP}:${tunnel.exposedPort}`;
-    const sc = tunnel._status || 'checking';
-    const st = sc === 'online' ? 'Active' : (sc === 'offline' ? 'Offline' : 'Checking');
-    const ib = tunnel.publicUrl ? `<span class="internet-badge">Public</span>` : '';
-    const ibl = tunnel.internetActive ? 'Stop Public' : 'Go Public';
-    const url = tunnel.publicUrl || localUrl;
-    return `
-      <div class="tunnel-card" id="tunnel-${tunnel.id}" style="animation-delay:${index * 0.06}s">
-        <div class="tunnel-card-header">
-          <div>
-            <div class="tunnel-port-display">${tunnel.localPort} <span class="port-arrow">→</span> ${tunnel.exposedPort}</div>
-            ${ib}
-          </div>
-          <span class="tunnel-status-badge ${sc}" id="status-badge-${tunnel.id}">
-            <span class="badge-dot"></span> <span class="status-text">${st}</span>
-          </span>
-        </div>
-        <div class="tunnel-url-row">
-          <span class="tunnel-url" id="url-${tunnel.id}">${url}</span>
-        </div>
-        <div class="tunnel-actions">
-          <button class="btn-action copy" id="copy-${tunnel.id}">Copy URL</button>
-          <button class="btn-action internet" id="internet-${tunnel.id}">${ibl}</button>
-          <button class="btn-action qr" id="qr-${tunnel.id}">QR Code</button>
-          <button class="btn-action stop" id="delete-${tunnel.id}">Stop</button>
-        </div>
-      </div>`;
-  }
-
-  // ---------- Fetch Tunnels ----------
   async function fetchTunnels() {
     try {
       const data = await apiGet('/api/tunnels');
       const sm = {};
-      tunnels.forEach((t) => { sm[t.id] = t._status; });
-      tunnels = (data.tunnels || []).map((t) => ({ ...t, _status: sm[t.id] || 'checking' }));
+      tunnels.forEach(t => { sm[t.id] = t._status; });
+      tunnels = (data.tunnels || []).map(t => ({ ...t, _status: sm[t.id] || 'checking' }));
       renderTunnels();
-    } catch (err) {
-      console.error('Failed to fetch tunnels:', err);
-      showToast('Failed to load tunnels', 'error');
-    }
+    } catch { showToast('Failed to load tunnels', 'error'); }
   }
 
-  // ---------- Toggle Internet ----------
   async function toggleInternet(id, enable) {
-    const btn = $(`#internet-${id}`);
-    if (btn) { btn.disabled = true; btn.textContent = 'Wait...'; }
     try {
       const data = await apiPost(`/api/tunnels/${id}/internet`, { enable });
-      showToast(data.publicUrl ? 'Public URL ready' : 'Internet tunnel stopped', data.publicUrl ? 'success' : 'info');
+      showToast(data.publicUrl ? 'Public URL ready' : 'Public stopped', data.publicUrl ? 'success' : 'info');
       await fetchTunnels();
-    } catch (err) {
-      showToast(err.message || 'Failed to toggle internet', 'error');
-      if (btn) { btn.disabled = false; btn.textContent = enable ? 'Go Public' : 'Stop Public'; }
-    }
+    } catch (err) { showToast(err.message, 'error'); }
   }
 
-  // ---------- Delete Tunnel ----------
   async function deleteTunnel(id) {
     const el = $(`#tunnel-${id}`);
-    if (el) el.style.animation = 'card-in 0.15s ease reverse forwards';
+    if (el) el.style.opacity = '0.3';
     try {
       await apiDelete(`/api/tunnels/${id}`);
       showToast('Tunnel stopped', 'info');
       setTimeout(async () => { await Promise.all([fetchTunnels(), fetchPorts()]); }, 150);
-    } catch (err) {
-      if (el) el.style.animation = '';
-      showToast(err.message || 'Failed to stop tunnel', 'error');
-    }
+    } catch (err) { if (el) el.style.opacity = ''; showToast(err.message, 'error'); }
   }
 
-  // ---------- Copy URL ----------
-  async function copyUrl(tunnel, type = 'local') {
-    const url = type === 'public' && tunnel.publicUrl ? tunnel.publicUrl : `http://${primaryIP}:${tunnel.exposedPort}`;
-    try {
-      await navigator.clipboard.writeText(url);
-      showToast('URL copied', 'success');
-    } catch {
-      const ta = document.createElement('textarea');
-      ta.value = url; ta.style.position = 'fixed'; ta.style.opacity = '0';
-      document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove();
-      showToast('URL copied', 'success');
-    }
+  async function copyUrl(t) {
+    const url = t.publicUrl || `http://${primaryIP}:${t.exposedPort}`;
+    try { await navigator.clipboard.writeText(url); } catch { const a = document.createElement('textarea'); a.value = url; a.style.cssText = 'position:fixed;opacity:0'; document.body.appendChild(a); a.select(); document.execCommand('copy'); a.remove(); }
+    showToast('URL copied', 'success');
   }
 
-  // ---------- QR Modal ----------
-  async function showQR(tunnelId) {
+  async function showQR(id) {
     dom.qrContainer.innerHTML = 'Loading...';
     dom.modalUrl.textContent = '';
     dom.qrModal.classList.add('visible');
     try {
-      const tunnel = tunnels.find((t) => t.id === tunnelId);
-      const type = tunnel && tunnel.publicUrl ? 'public' : 'local';
-      const data = await apiGet(`/api/tunnels/${tunnelId}/qr?type=${type}`);
+      const t = tunnels.find(x => x.id === id);
+      const type = t?.publicUrl ? 'public' : 'local';
+      const data = await apiGet(`/api/tunnels/${id}/qr?type=${type}`);
       dom.qrContainer.innerHTML = data.qr || '<p>QR unavailable</p>';
       dom.modalUrl.textContent = data.url || '';
-    } catch (err) {
-      dom.qrContainer.innerHTML = '<p style="color:var(--red)">Failed to load QR</p>';
-      showToast('Failed to load QR code', 'error');
-    }
+    } catch { dom.qrContainer.innerHTML = '<p style="color:var(--red)">Failed</p>'; }
   }
 
   function closeModal() {
@@ -347,23 +368,37 @@
     setTimeout(() => { dom.qrContainer.innerHTML = ''; dom.modalUrl.textContent = ''; }, 200);
   }
 
-  // ---------- Polling ----------
+  // ── Metrics ──
+  function updateMetrics() {
+    const tc = tunnels.length;
+    dom.metricTunnels.textContent = tc;
+    dom.metricTunnelsSub.textContent = tc ? `${tc} tunnel${tc > 1 ? 's' : ''} running` : 'No tunnels running';
+
+    dom.metricPorts.textContent = ports.length;
+    dom.metricPortsSub.textContent = ports.length ? `${ports.length} app${ports.length > 1 ? 's' : ''} detected` : 'No apps found';
+
+    const totalReq = tunnels.reduce((sum, t) => sum + (t.totalRequests || 0), 0);
+    dom.metricRequests.textContent = totalReq > 999 ? `${(totalReq / 1000).toFixed(1)}k` : totalReq;
+    dom.metricRequestsSub.textContent = 'Across all tunnels';
+  }
+
+  // ── Polling ──
   async function pollStatuses() {
     if (!tunnels.length) return;
-    const updates = await Promise.allSettled(tunnels.map(async (t) => {
-      const data = await apiGet(`/api/tunnels/${t.id}/status`);
-      return { id: t.id, status: data.status };
+    const updates = await Promise.allSettled(tunnels.map(async t => {
+      const d = await apiGet(`/api/tunnels/${t.id}/status`);
+      return { id: t.id, status: d.status };
     }));
-    updates.forEach((r) => {
+    updates.forEach(r => {
       if (r.status !== 'fulfilled') return;
       const { id, status } = r.value;
-      const t = tunnels.find((x) => x.id === id);
+      const t = tunnels.find(x => x.id === id);
       if (t && t._status !== status) {
         t._status = status;
-        const badge = $(`#status-badge-${id}`);
-        const text = badge?.querySelector('.status-text');
-        if (badge) badge.className = `tunnel-status-badge ${status}`;
-        if (text) text.textContent = status === 'online' ? 'Active' : (status === 'offline' ? 'Offline' : 'Checking');
+        // Update dots in both panels
+        document.querySelectorAll(`#tunnel-${id} .tunnel-status-dot`).forEach(dot => {
+          dot.className = `tunnel-status-dot ${status === 'online' ? 'green' : status === 'offline' ? 'red' : 'amber'}`;
+        });
       }
     });
   }
@@ -374,55 +409,50 @@
       const data = await apiGet('/api/tunnels');
       const fresh = data.tunnels || [];
       let rerender = false;
-      fresh.forEach((ft) => {
-        const ex = tunnels.find((t) => t.id === ft.id);
+      fresh.forEach(ft => {
+        const ex = tunnels.find(t => t.id === ft.id);
         if (ex) {
           ex.totalRequests = ft.totalRequests;
-          ex.activeConnections = ft.activeConnections;
           if (ex.internetActive !== ft.internetActive || ex.publicUrl !== ft.publicUrl) {
             ex.internetActive = ft.internetActive; ex.publicUrl = ft.publicUrl; rerender = true;
           }
         }
       });
       if (fresh.length !== tunnels.length || rerender) {
-        tunnels = fresh.map((ft) => ({ ...ft, _status: tunnels.find((t) => t.id === ft.id)?._status || 'checking' }));
+        tunnels = fresh.map(ft => ({ ...ft, _status: tunnels.find(t => t.id === ft.id)?._status || 'checking' }));
         renderTunnels();
       }
-    } catch (err) { console.error('Stats poll error:', err); }
+      updateMetrics();
+    } catch {}
   }
 
-  // ---------- Utility ----------
-  function escapeHtml(str) {
-    const div = document.createElement('div');
-    div.textContent = str || '';
-    return div.innerHTML;
-  }
+  // ── Utility ──
+  function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
 
-  // ---------- Events ----------
+  // ── Events ──
   function bindEvents() {
     dom.modalClose.addEventListener('click', closeModal);
-    dom.qrModal.addEventListener('click', (e) => { if (e.target === dom.qrModal) closeModal(); });
-    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && dom.qrModal.classList.contains('visible')) closeModal(); });
+    dom.qrModal.addEventListener('click', e => { if (e.target === dom.qrModal) closeModal(); });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
     dom.btnRefreshPorts.addEventListener('click', refreshPorts);
   }
 
-  // ---------- Initialize ----------
+  // ── Init ──
   async function init() {
-    // Platform
     if (platform === 'darwin') document.body.classList.add('platform-darwin');
-    dom.statusPlatform.textContent = getPlatformLabel();
-    dom.footerPlatform.textContent = getPlatformLabel();
+    dom.statusPlatform.textContent = platformLabel;
+    dom.footerPlatform.innerHTML = `<svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.2"><circle cx="5" cy="5" r="3.5"/></svg> ${platformLabel}`;
 
+    initTheme();
+    initNav();
     bindEvents();
+
     await Promise.all([fetchInterfaces(), fetchTunnels(), fetchPorts()]);
     setInterval(pollStatuses, 3000);
     setInterval(pollStats, 5000);
     pollStatuses();
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
-  } else {
-    init();
-  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
 })();
